@@ -5,18 +5,18 @@ import { PROBLEM_MAPPING } from '../../problems';
 import VisualizerRenderer from '../Workspace/VisualizerRenderer'; 
 import ExecutionConsole from '../Workspace/ExecutionConsole'; 
 import { usePyodide } from '../../hooks/usePyodide'; 
+import { useView } from '../../context/ViewContext'; // 1. Import Context
 
 const ProblemWorkspace = () => {
   const { problemId } = useParams();
+  const { activeTab } = useView(); // 2. Get Active Tab
   const [problem, setProblem] = useState(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
   
-  // Engine Hooks
   const { runCode, generateTrace, loading: engineLoading } = usePyodide();
-  
   const [output, setOutput] = useState(null);
-  const [traceData, setTraceData] = useState([]); // Store the trace steps here
+  const [traceData, setTraceData] = useState([]); 
 
   useEffect(() => {
     const loadProblem = async () => {
@@ -28,10 +28,8 @@ const ProblemWorkspace = () => {
           const data = module.default;
           setProblem(data);
           setCode(data.defaultCode);
-          setTraceData([]); // Clear previous trace on load
-        } catch (err) {
-          console.error("Failed to load problem:", err);
-        }
+          setTraceData([]);
+        } catch (err) { console.error(err); }
       }
       setLoading(false);
     };
@@ -39,40 +37,24 @@ const ProblemWorkspace = () => {
   }, [problemId]);
 
   const handleRun = async () => {
-    if (!problem || !problem.testCases) {
-      alert("Test cases missing!");
-      return;
-    }
-
+    if (!problem || !problem.testCases) { alert("Test cases missing!"); return; }
     setOutput({ status: "running" });
 
-    // 1. Run User Code (Pass/Fail) - GENERIC EXECUTION
-    // We now pass entryFunction (e.g., "isValid") and inputVariables (e.g., ["s"])
-    const { results, error } = await runCode(
-        code, 
-        problem.testCases, 
-        problem.entryFunction, 
-        problem.inputVariables
-    );
+    // Run Code
+    const { results, error } = await runCode(code, problem.testCases, problem.entryFunction, problem.inputVariables);
 
     if (error) {
       setOutput({ status: "error", message: error });
     } else {
       setOutput({ status: "success", cases: results });
 
-      // 2. Generate Visualization Trace
-      // Only run if the problem supports visualization (has getTraceScript)
-      if (problem.getTraceScript && problem.visualData) {
+      // Only generate trace if Live Trace is ENABLED for this problem
+      if (!problem.hideLiveTrace && problem.getTraceScript && problem.visualData) {
         try {
             const script = problem.getTraceScript(problem.visualData);
             const steps = await generateTrace(script);
             setTraceData(steps);
-        } catch (traceErr) {
-            console.error("Trace generation failed", traceErr);
-        }
-      } else {
-        // Clear trace if problem doesn't support visualization yet
-        setTraceData([]);
+        } catch (e) { console.error(e); }
       }
     }
   };
@@ -81,31 +63,57 @@ const ProblemWorkspace = () => {
     if (problem) {
       setCode(problem.defaultCode);
       setOutput(null);
-      setTraceData([]); // Clear trace
+      setTraceData([]);
     }
   };
 
   if (loading) return <div style={{ padding: '80px', color: 'white' }}>Loading Workspace...</div>;
   if (!problem) return <div style={{ padding: '80px', color: 'white' }}>Problem not found.</div>;
 
+  // ==========================================
+  // VIEW 1: DEDICATED VISUALIZER TAB
+  // ==========================================
+  if (activeTab === 'visualizer') {
+    return (
+      <div style={{ marginTop: '70px', height: 'calc(100vh - 70px)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+        <h1 className="text-3xl font-bold mb-4">Dedicated Visualizer</h1>
+        <p className="text-gray-400">This is where the complex visualization for {problem.title} will live.</p>
+        <p className="text-gray-500 text-sm mt-2">(Coming soon for Linked Lists, Trees, Graphs)</p>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: LEARN TAB
+  // ==========================================
+  if (activeTab === 'learn') {
+    return (
+      <div style={{ marginTop: '70px', height: 'calc(100vh - 70px)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <h1 className="text-2xl">Learning Material for {problem.title}</h1>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW 3: EDITOR TAB (Default)
+  // ==========================================
+  const showRightPanel = !problem.hideLiveTrace; // Check flag
+
   return (
     <div style={{ 
       display: 'flex', 
-      marginTop: '60px',  // Match your Navbar height
-      height: 'calc(100vh - 60px)', 
+      marginTop: '64px',  
+      height: 'calc(100vh - 64px)', 
       width: '100%',
       backgroundColor: '#0a0a0f', 
       color: 'white',
       overflow: 'hidden'
     }}>
-      {/* Left Panel - Problem Description */}
+      {/* 1. DESCRIPTION PANEL */}
       <aside style={{ 
         width: '350px', 
         borderRight: '1px solid #1f2937',
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflow: 'hidden', 
-        backgroundColor: '#0f172a' 
+        display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#0f172a' 
       }}>
         <div style={{ padding: '24px', borderBottom: '1px solid #1f2937' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>{problem.title}</h1>
@@ -125,13 +133,11 @@ const ProblemWorkspace = () => {
         </div>
       </aside>
 
-      {/* Middle Panel - Editor + Console */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #1f2937', backgroundColor: '#1e1e1e' }}>
+      {/* 2. EDITOR + CONSOLE (Middle) */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: showRightPanel ? '1px solid #1f2937' : 'none', backgroundColor: '#1e1e1e' }}>
         
-        {/* Editor Area (Flex 2) */}
+        {/* Editor (Flex 2) */}
         <div style={{ flex: 2, display: 'flex', flexDirection: 'column', borderBottom: '1px solid #1f2937', overflow: 'hidden' }}>
-          
-          {/* Toolbar */}
           <div style={{ height: '50px', padding: '0 16px', backgroundColor: '#1e1e1e', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#60a5fa', boxShadow: '0 0 8px rgba(96,165,250,0.6)' }}></span>
@@ -148,7 +154,6 @@ const ProblemWorkspace = () => {
                 </button>
              </div>
           </div>
-
           <div style={{ flex: 1, position: 'relative' }}>
              <Editor height="100%" width="100%" theme="vs-dark" defaultLanguage="python" value={code} onChange={(v) => setCode(v || "")} options={{ minimap: { enabled: false }, fontSize: 14, automaticLayout: true, padding: { top: 16 } }} />
           </div>
@@ -165,26 +170,17 @@ const ProblemWorkspace = () => {
         </div>
       </div>
 
-      {/* Right Panel - Visualization */}
-      <section style={{ 
-        width: '350px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflow: 'hidden', 
-        backgroundColor: '#0f172a' 
-      }}>
-        <div style={{ padding: '12px 16px', backgroundColor: '#111827', borderBottom: '1px solid #1f2937', height: '50px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontSize: '14px', fontWeight: '600', color: '#9ca3af' }}>Live Memory View</span>
-        </div>
-        
-        {/* THIS CONTAINER MUST BE FLEX: 1 and OVERFLOW HIDDEN */}
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          <VisualizerRenderer 
-            traceSteps={traceData} 
-            visualData={problem.visualData} 
-          />
-        </div>
-      </section>
+      {/* 3. LIVE TRACE PANEL (Conditionally Rendered) */}
+      {showRightPanel && (
+        <section style={{ width: '350px', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#0f172a' }}>
+          <div style={{ padding: '12px 16px', backgroundColor: '#111827', borderBottom: '1px solid #1f2937', height: '50px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#9ca3af' }}>Live Memory View</span>
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <VisualizerRenderer traceSteps={traceData} visualData={problem.visualData} />
+          </div>
+        </section>
+      )}
     </div>
   );
 };

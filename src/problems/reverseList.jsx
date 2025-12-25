@@ -20,10 +20,18 @@ const ReverseListDescription = () => (
       <strong>Input:</strong> <code>head = [1,2]</code><br />
       <strong>Output:</strong> <code>[2,1]</code>
     </p>
+
+    <br />
+    <h4 className="section-subtitle">Constraints:</h4>
+    <ul className="prob-text">
+      <li><code>0 ≤ number of nodes ≤ 5000</code></li>
+      <li><code>-5000 ≤ Node.val ≤ 5000</code></li>
+    </ul>
   </div>
 );
 
-// Helper string to inject into Python for Linked List operations
+// 1. HELPER SCRIPT with Wrapper
+// We define a wrapper that runs the user code AND formats the output
 const LIST_NODE_HELPER = `
 class ListNode:
     def __init__(self, val=0, next=None):
@@ -44,16 +52,24 @@ def list_to_arr(node):
         arr.append(node.val)
         node = node.next
     return arr
+
+# WRAPPER FUNCTION: Runs the user's solution and converts result to Array
+def run_wrapper(head):
+    result_head = reverseList(head)
+    return list_to_arr(result_head)
 `;
 
 export default {
   id: "reverse-linked-list",
   title: "206. Reverse Linked List",
   difficulty: "Easy",
+  type: "linked-list",
+  hideLiveTrace: true,    // 🔴 HIDES right panel in Editor tab
   description: <ReverseListDescription />,
   
-  // EXECUTION CONFIG
-  entryFunction: "reverseList",
+  // 2. UPDATED EXECUTION CONFIG
+  // We call 'run_wrapper' instead of 'reverseList' directly
+  entryFunction: "run_wrapper",
   inputVariables: ["head"],
 
   defaultCode: `def reverseList(head):
@@ -69,11 +85,10 @@ export default {
     return prev`,
 
   visualData: {
-    // Initial data for the visualizer
     values: [1, 2, 3, 4, 5] 
   },
 
-  // 🟢 TRACE GENERATOR FOR LINKED LIST
+  // Trace script for Visualizer (unchanged)
   getTraceScript: (visualData) => {
     const vals = JSON.stringify(visualData.values);
     return `
@@ -81,20 +96,15 @@ import json
 ${LIST_NODE_HELPER}
 
 def trace_reverse(vals):
-    # Setup
     head = create_list(vals)
     steps = []
     
-    # We need to map object IDs to values to track them visually
-    # In a real debugger we use memory addresses, here we use values (assuming unique for simplicity)
-    # or just simple indexing since we know the initial order.
-    
+    # Snapshot helper
     nodes_state = [{"id": v, "val": v, "next": vals[i+1] if i < len(vals)-1 else None} for i, v in enumerate(vals)]
     
     prev = None
     curr = head
     
-    # Initial Snapshot
     steps.append({
         "nodes": nodes_state[:],
         "pointers": { "prev": None, "curr": curr.val if curr else None },
@@ -102,23 +112,24 @@ def trace_reverse(vals):
     })
 
     while curr:
-        # Step: Identify Next
         nxt = curr.next
+        
+        # Step: Current
         steps.append({
             "nodes": nodes_state[:],
             "pointers": { "prev": prev.val if prev else None, "curr": curr.val, "nxt": nxt.val if nxt else None },
             "status": "current"
         })
 
-        # Step: Reversal
+        # Logic: Reversal
         curr.next = prev
         
-        # Update Node State for Visualizer (find node with val == curr.val and update its next)
-        new_nodes = [n.copy() for n in nodes_state] # Deep copy for snapshot
+        # Visual Update
+        new_nodes = [n.copy() for n in nodes_state]
         for n in new_nodes:
             if n["val"] == curr.val:
                 n["next"] = prev.val if prev else None
-        nodes_state = new_nodes # Persist change
+        nodes_state = new_nodes
 
         steps.append({
             "nodes": nodes_state[:],
@@ -126,7 +137,7 @@ def trace_reverse(vals):
             "status": "reverse"
         })
 
-        # Step: Move Pointers
+        # Logic: Move
         prev = curr
         curr = nxt
         
@@ -142,12 +153,11 @@ trace_reverse(${vals})
 `;
   },
 
-  // 🟢 TEST CASES
+  // 3. UPDATED TEST CASES
+  // Input now includes the helper + wrapper definitions
   testCases: [
     {
-      // We inject the helper class + the specific test case setup
       input: `${LIST_NODE_HELPER}\nhead = create_list([1,2,3,4,5])`,
-      // We modify the runner to check the result by converting back to array
       expected: "[5, 4, 3, 2, 1]"
     },
     {

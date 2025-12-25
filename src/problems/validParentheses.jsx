@@ -63,6 +63,8 @@ export default {
   id: "valid-parentheses",
   title: "20. Valid Parentheses",
   difficulty: "Easy",
+  type: "stack",
+  hideLiveTrace: true,    // 🔴 HIDES right panel in Editor tab
   description: <ValidParenthesesDescription />,
   
   // EXECUTION CONFIG

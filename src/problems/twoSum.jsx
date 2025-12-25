@@ -82,6 +82,8 @@ export default {
   id: "two-sum",
   title: "1. Two Sum",
   difficulty: "Easy",
+  type: "array",          // 🟢 KEEPS right panel enabled
+  hideLiveTrace: false,   // 🟢 Explicit flag
   description: <TwoSumDescription />,
   
   // EXECUTION CONFIG
