@@ -83,18 +83,47 @@ export default {
   title: "1. Two Sum",
   difficulty: "Easy",
   description: <TwoSumDescription />,
+  
+  // EXECUTION CONFIG
+  entryFunction: "twoSum",
+  inputVariables: ["nums", "target"], // <--- NEW
+
   defaultCode: `def twoSum(nums, target):
-    # Write your solution here
     for i in range(len(nums)):
         for j in range(i + 1, len(nums)):
             if nums[i] + nums[j] == target:
                 return [i, j]
     return []`,
+
+  // VISUALIZATION CONFIG
   visualData: {
     nums: [2, 7, 11, 15],
-    currentState: { i: 0, seen: {}, complement: 7 }
+    target: 9
   },
-  // 🟢 THIS WAS MISSING!
+
+  // This function generates the specific Python script needed to visualize Two Sum
+  getTraceScript: (visualData) => {
+    const nums = JSON.stringify(visualData.nums);
+    const target = visualData.target;
+    return `
+import json
+def trace(nums, target):
+    steps = []
+    seen = {}
+    steps.append({ "i": -1, "seen": {}, "status": "start", "complement": None })
+    for i, val in enumerate(nums):
+        complement = target - val
+        steps.append({ "i": i, "val": val, "complement": complement, "seen": seen.copy(), "status": "checking" })
+        if complement in seen:
+            steps.append({ "i": i, "val": val, "complement": complement, "seen": seen.copy(), "matchIndex": seen[complement], "status": "found" })
+            break
+        seen[val] = i
+        steps.append({ "i": i, "val": val, "complement": complement, "seen": seen.copy(), "status": "stored" })
+    return json.dumps(steps)
+trace(${nums}, ${target})
+`;
+  },
+
   testCases: [
     { 
       input: "nums = [2, 7, 11, 15]\ntarget = 9",

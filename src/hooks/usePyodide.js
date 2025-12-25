@@ -13,26 +13,19 @@ export const usePyodide = () => {
       }
 
       try {
-        console.log("Loading Pyodide script...");
         const script = document.createElement('script');
         script.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
         script.async = true;
         document.body.appendChild(script);
 
         script.onload = async () => {
-          console.log("Initializing Pyodide...");
-          
-          // 🟢 DEBUG FIX 1: Capture stdout/stderr
-          // This allows Python print() statements to show in Chrome Console
           const pyodideInstance = await window.loadPyodide({
-            stdout: (text) => console.log("🐍 Python Output:", text),
-            stderr: (text) => console.error("🐍 Python Error:", text),
+            stdout: (text) => console.log("🐍 Output:", text),
+            stderr: (text) => console.error("🐍 Error:", text),
           });
-          
           window.pyodideInstance = pyodideInstance;
           setPyodide(pyodideInstance);
           setLoading(false);
-          console.log("Pyodide Ready!");
         };
       } catch (err) {
         console.error("Failed to load Pyodide", err);
@@ -43,88 +36,66 @@ export const usePyodide = () => {
     loadPyodide();
   }, []);
   
-  const runCode = async (userCode, testCases) => {
+  // 1. GENERIC RUN CODE
+  const runCode = async (userCode, testCases, entryFunction, inputVars) => {
     if (!pyodide) return { error: "Engine loading..." };
-
     const results = [];
 
     try {
-      // 1. Load User Code Globally
-      console.log("--- Loading User Code ---");
-      console.log(userCode);
       await pyodide.runPythonAsync(userCode);
 
-      // 2. Run Test Cases
       for (const [index, test] of testCases.entries()) {
         
+        // 🟢 FIX: Don't trim individual lines! 
+        // We must preserve the relative indentation (e.g. inside classes)
         const indentedInput = test.input
-            .trim()
             .split('\n')
-            .map(line => `        ${line.trim()}`) 
+            .map(line => `        ${line}`) // Just add 8 spaces padding
             .join('\n');
+        
+        // Construct dynamic function call
+        const callArgs = inputVars.join(", ");
 
         const harness = `
 import json
-
 def run_test():
     try:
-# --- INJECTED INPUTS START ---
 ${indentedInput}
-# --- INJECTED INPUTS END ---
+        # Dynamic Call
+        result = ${entryFunction}(${callArgs})
         
-        # Run Function
-        result = twoSum(nums, target)
-        
-        # Check Result
+        # Compare
         expected = ${test.expected}
-        passed = result == expected
+        passed = str(result) == str(expected) # String comparison for safety
         
-        return json.dumps({
-            "passed": passed,
-            "output": result,
-            "expected": expected
-        })
+        # Return result
+        # Note: We use str(result) to handle objects like LinkedLists safely in JSON
+        return json.dumps({ "passed": passed, "output": str(result), "expected": str(expected) })
     except Exception as e:
-        return json.dumps({
-            "passed": False,
-            "error": str(e)
-        })
-
+        return json.dumps({ "passed": False, "error": str(e) })
 run_test()
 `;
-
-        // 🟢 DEBUG FIX 2: Log the constructed Python script
-        // This lets you see exactly what is being sent to the engine
-        console.groupCollapsed(`Test Case ${index + 1} Execution`);
-        console.log("Generated Harness Code:\n", harness);
-
-        // Run the harness
         const rawResult = await pyodide.runPythonAsync(harness);
-        
-        console.log("Raw JSON Result from Python:", rawResult);
-        console.groupEnd();
-        
-        // Parse Result Safely
-        try {
-            const resultJson = JSON.parse(rawResult);
-            results.push({ ...resultJson, input: test.input });
-        } catch (jsonErr) {
-            console.error("JSON Parse Error:", jsonErr);
-            results.push({ 
-                passed: false, 
-                input: test.input,
-                error: "System Error: Invalid JSON output. " + rawResult
-            });
-        }
+        results.push({ ...JSON.parse(rawResult), input: test.input });
       }
-
       return { results };
-
     } catch (err) {
-      console.error("Execution Critical Error:", err);
       return { error: err.message };
     }
   };
 
-  return { runCode, loading };
+  // 2. GENERIC TRACE GENERATOR
+  const generateTrace = async (traceScript) => {
+    if (!pyodide || !traceScript) return [];
+
+    try {
+      const rawTrace = await pyodide.runPythonAsync(traceScript);
+      return JSON.parse(rawTrace);
+    } catch (err) {
+      console.error("Trace Generation Failed:", err);
+      return [];
+    }
+  };
+
+  return { runCode, generateTrace, loading };
 };

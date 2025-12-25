@@ -10,9 +10,7 @@ const ValidParenthesesDescription = () => (
       valid.
     </p>
 
-    <p className="prob-text">
-      An input string is valid if:
-    </p>
+    <p className="prob-text">An input string is valid if:</p>
 
     <ul className="prob-text">
       <li>Open brackets must be closed by the same type of brackets.</li>
@@ -66,6 +64,11 @@ export default {
   title: "20. Valid Parentheses",
   difficulty: "Easy",
   description: <ValidParenthesesDescription />,
+  
+  // EXECUTION CONFIG
+  entryFunction: "isValid",
+  inputVariables: ["s"],
+
   defaultCode: `def isValid(s):
     stack = []
     mapping = {')': '(', '}': '{', ']': '['}
@@ -79,8 +82,57 @@ export default {
             stack.append(char)
 
     return not stack`,
+
+  // VISUALIZATION CONFIG
   visualData: {
-    input: "()[]{}",
-    currentState: { index: 0, stack: [] }
-  }
+    input: "()[]{}" 
+  },
+
+  // 🟢 NEW: PYTHON SCRIPT TO GENERATE STACK TRACE
+  getTraceScript: (visualData) => {
+    const inputStr = JSON.stringify(visualData.input);
+    return `
+import json
+def trace_valid_parentheses(s):
+    steps = []
+    stack = []
+    mapping = {')': '(', '}': '{', ']': '['}
+    
+    steps.append({ "i": -1, "stack": [], "char": None, "status": "start" })
+    
+    for i, char in enumerate(s):
+        # Step: Inspect Char
+        steps.append({ "i": i, "stack": list(stack), "char": char, "status": "inspect" })
+        
+        if char in mapping:
+            # Step: Attempt Pop
+            steps.append({ "i": i, "stack": list(stack), "char": char, "status": "pop" })
+            
+            top = stack.pop() if stack else '#'
+            
+            if mapping[char] != top:
+                # Step: Mismatch
+                steps.append({ "i": i, "stack": list(stack), "char": char, "status": "error" })
+                break
+            else:
+                 # Step: Match Found
+                 steps.append({ "i": i, "stack": list(stack), "char": char, "status": "match" })
+        else:
+            stack.append(char)
+            # Step: Push
+            steps.append({ "i": i, "stack": list(stack), "char": char, "status": "push" })
+
+    return json.dumps(steps)
+
+trace_valid_parentheses(${inputStr})
+`;
+  },
+
+  testCases: [
+    { input: "s = \"()\"", expected: "True" },
+    { input: "s = \"()[]{}\"", expected: "True" },
+    { input: "s = \"(]\"", expected: "False" },
+    { input: "s = \"([)]\"", expected: "False" },
+    { input: "s = \"{[]}\"", expected: "True" }
+  ]
 };
