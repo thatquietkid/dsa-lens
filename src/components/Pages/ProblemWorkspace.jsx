@@ -49,6 +49,18 @@ const ProblemWorkspace = () => {
     loadProblem();
   }, [problemId]);
 
+  // Update Document Title based on current problem
+  useEffect(() => {
+    if (problem) {
+      document.title = `DSA Lens - ${problem.title}`;
+    }
+    
+    // Cleanup: Reset title when component unmounts
+    return () => {
+      document.title = "DSA Lens";
+    };
+  }, [problem]);
+
   // 1. RUN CODE
   const handleRun = async () => {
     if (!problem || !problem.testCases) { alert("Test cases missing!"); return; }
