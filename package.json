@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "^7.2.4"
+    "@vitejs/plugin-react": "^5.1.2",
+    "vite": "^7.2.4",
+    "vite-plugin-compression": "^0.5.1"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
