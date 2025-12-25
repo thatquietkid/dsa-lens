@@ -1,0 +1,21 @@
+{
+  "name": "dsa-visualizer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "framer-motion": "^12.23.26",
+    "next-themes": "^0.4.6",
+    "pyodide": "^0.29.0",
+    "react-router-dom": "^7.11.0"
+  }
+}
