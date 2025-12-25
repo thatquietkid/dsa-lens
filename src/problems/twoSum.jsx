@@ -93,5 +93,20 @@ export default {
   visualData: {
     nums: [2, 7, 11, 15],
     currentState: { i: 0, seen: {}, complement: 7 }
-  }
+  },
+  // 🟢 THIS WAS MISSING!
+  testCases: [
+    { 
+      input: "nums = [2, 7, 11, 15]\ntarget = 9",
+      expected: "[0, 1]" 
+    },
+    { 
+      input: "nums = [3, 2, 4]\ntarget = 6",
+      expected: "[1, 2]" 
+    },
+    { 
+      input: "nums = [3, 3]\ntarget = 6",
+      expected: "[0, 1]" 
+    }
+  ]
 };
