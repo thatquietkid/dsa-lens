@@ -429,3 +429,16 @@ border-color: var(--accent-cyan);
   border-radius: 16px;
   overflow: hidden;
 }
+
+/* Monaco Editor Custom Styles */
+.active-line-highlight {
+    background: rgba(34, 211, 238, 0.1) !important;
+    border-left: 3px solid #22d3ee !important;
+}
+
+.active-line-glyph {
+    background: #22d3ee;
+    width: 4px !important;
+    margin-left: 5px;
+    box-shadow: 0 0 10px #22d3ee;
+}

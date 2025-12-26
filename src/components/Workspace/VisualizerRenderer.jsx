@@ -1,101 +1,184 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw } from 'lucide-react';
 import VisualTrace from './VisualTrace';
 
-// CHANGED: Accepts traceSteps directly from parent
-const VisualizerRenderer = ({ traceSteps, visualData }) => {
-  const [currentStep, setCurrentStep] = useState(0);
+const VisualizerRenderer = ({ traceSteps = [], onStepChange }) => {
+  const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const timerRef = useRef(null);
+  const [speed, setSpeed] = useState(800);
 
-  // Reset when new trace data arrives
+  // Auto-play logic
   useEffect(() => {
-    setCurrentStep(0);
-    setIsPlaying(false);
-  }, [traceSteps]);
-
-  // Handle Playback Loop
-  useEffect(() => {
-    if (isPlaying && traceSteps && traceSteps.length > 0) {
-      timerRef.current = setInterval(() => {
-        setCurrentStep((prev) => {
-          if (prev < traceSteps.length - 1) return prev + 1;
-          setIsPlaying(false);
-          return prev;
-        });
-      }, 1500); 
+    let timer;
+    if (isPlaying && currentStepIdx < traceSteps.length - 1) {
+      timer = setTimeout(() => {
+        setCurrentStepIdx((prev) => prev + 1);
+      }, speed);
     } else {
-      clearInterval(timerRef.current);
+      setIsPlaying(false);
     }
-    return () => clearInterval(timerRef.current);
-  }, [isPlaying, traceSteps]);
+    return () => clearTimeout(timer);
+  }, [isPlaying, currentStepIdx, traceSteps.length, speed]);
 
-  // Controls
-  const handleNext = () => setCurrentStep(p => Math.min(p + 1, traceSteps.length - 1));
-  const handlePrev = () => setCurrentStep(p => Math.max(p - 1, 0));
-  const handleReset = () => { setIsPlaying(false); setCurrentStep(0); };
+  // Sync step changes to the editor highlight
+  useEffect(() => {
+    if (traceSteps[currentStepIdx] && onStepChange) {
+      onStepChange(traceSteps[currentStepIdx].line);
+    }
+  }, [currentStepIdx, traceSteps, onStepChange]);
 
-  if (!traceSteps || traceSteps.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
-        Run code to generate visualization
+  const handleReset = () => {
+    setCurrentStepIdx(0);
+    setIsPlaying(false);
+  };
+
+  const progress = traceSteps.length > 0 
+    ? ((currentStepIdx + 1) / traceSteps.length) * 100 
+    : 0;
+
+  return (
+    <div style={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      backgroundColor: '#0f172a' 
+    }}>
+      
+      {/* 1. VISUALIZATION CANVAS */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {traceSteps.length > 0 ? (
+          <VisualTrace currentState={traceSteps[currentStepIdx]} />
+        ) : (
+          <div style={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            color: '#475569',
+            fontSize: '13px',
+            textAlign: 'center',
+            padding: '40px'
+          }}>
+            Run the engine to generate <br/> the memory trace.
+          </div>
+        )}
       </div>
-    );
-  }
 
-  const currentState = traceSteps[currentStep];
-
-    return (
-    <div className="flex flex-col flex-1 min-h-0 bg-[#0f172a]">
-        {/* SCROLLABLE CANVAS */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 relative">
-        <VisualTrace 
-          currentState={traceSteps[currentStep]} 
-          nums={visualData.nums} 
-          target={visualData.target}
-          inputString={visualData.input} // <--- ADD THIS LINE
-        />
+      {/* 2. CONTROL BAR (Modern Player UI) */}
+      <div style={{ 
+        padding: '20px', 
+        background: '#111827', 
+        borderTop: '1px solid #1f2937',
+        boxShadow: '0 -10px 20px rgba(0,0,0,0.2)'
+      }}>
+        
+        {/* Progress Bar */}
+        <div style={{ 
+          height: '4px', 
+          width: '100%', 
+          background: '#1e293b', 
+          borderRadius: '2px', 
+          marginBottom: '20px',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <div style={{ 
+            width: `${progress}%`, 
+            height: '100%', 
+            background: '#22d3ee', 
+            boxShadow: '0 0 10px #22d3ee',
+            transition: 'width 0.3s ease' 
+          }} />
         </div>
 
-        {/* CONTROL BAR (ALWAYS VISIBLE) */}
-        <div className="h-14 shrink-0 border-t border-white/10 bg-[#1e293b] flex items-center justify-between px-4">
-        <div className="text-xs text-gray-400 font-mono">
-            Step {currentStep + 1} / {traceSteps.length}
-        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          
+          {/* Step Counter */}
+          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', fontFamily: 'monospace' }}>
+            STEP <span style={{ color: '#fff' }}>{currentStepIdx + 1}</span> / {traceSteps.length || 0}
+          </div>
 
-        <div className="flex items-center gap-2">
-            <button onClick={handleReset} className="p-2 hover:bg-white/10 rounded">
+          {/* Player Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button 
+              onClick={() => setCurrentStepIdx(prev => Math.max(0, prev - 1))}
+              disabled={currentStepIdx === 0}
+              style={controlButtonStyle}
+            >
+              <ChevronLeft size={18} />
+            </button>
+
+            <button 
+              onClick={() => setIsPlaying(!isPlaying)}
+              style={{ 
+                ...controlButtonStyle, 
+                background: '#22d3ee', 
+                color: '#000', 
+                width: '40px', 
+                height: '40px', 
+                borderRadius: '50%',
+                boxShadow: isPlaying ? '0 0 20px rgba(34,211,238,0.4)' : 'none'
+              }}
+            >
+              {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+            </button>
+
+            <button 
+              onClick={() => setCurrentStepIdx(prev => Math.min(traceSteps.length - 1, prev + 1))}
+              disabled={currentStepIdx === traceSteps.length - 1}
+              style={controlButtonStyle}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* Extra Actions */}
+          <button 
+            onClick={handleReset}
+            style={{ ...controlButtonStyle, padding: '5px' }}
+            title="Reset Trace"
+          >
             <RotateCcw size={16} />
-            </button>
-
-            <button
-            onClick={handlePrev}
-            disabled={currentStep === 0}
-            className="p-2 hover:bg-white/10 rounded disabled:opacity-30"
-            >
-            <ChevronLeft size={20} />
-            </button>
-
-            <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                isPlaying ? 'bg-amber-500' : 'bg-green-500'
-            }`}
-            >
-            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-
-            <button
-            onClick={handleNext}
-            disabled={currentStep === traceSteps.length - 1}
-            className="p-2 hover:bg-white/10 rounded disabled:opacity-30"
-            >
-            <ChevronRight size={20} />
-            </button>
+          </button>
         </div>
+
+        {/* Speed Selector */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
+            {[1200, 800, 300].map((s, idx) => (
+                <button 
+                    key={s}
+                    onClick={() => setSpeed(s)}
+                    style={{
+                        fontSize: '9px',
+                        fontWeight: 'bold',
+                        color: speed === s ? '#22d3ee' : '#475569',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        letterSpacing: '1px'
+                    }}
+                >
+                    {idx === 0 ? 'SLOW' : idx === 1 ? 'NORMAL' : 'FAST'}
+                </button>
+            ))}
         </div>
+      </div>
     </div>
-    );
+  );
+};
+
+// Common style for control buttons
+const controlButtonStyle = {
+  background: 'rgba(255,255,255,0.05)',
+  border: 'none',
+  color: '#fff',
+  borderRadius: '8px',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.2s ease',
+  padding: '8px'
 };
 
 export default VisualizerRenderer;

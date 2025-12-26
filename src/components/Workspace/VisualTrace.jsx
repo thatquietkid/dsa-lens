@@ -1,330 +1,202 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, CornerDownRight } from 'lucide-react';
 
-const VisualTrace = ({ currentState, nums, target, inputString }) => {
-  if (!currentState) return null;
-
-  // ============================================
-  // 🔍 MODE DETECTION
-  // ============================================
-  const isStackMode = currentState.stack !== undefined;      // Valid Parentheses
-  const isListMode = currentState.nodes !== undefined;       // Reverse Linked List
-  const isBinarySearch = currentState.left !== undefined;    // Binary Search
-
-  // ============================================
-  // 🔗 MODE 1: LINKED LIST (e.g. Reverse List)
-  // ============================================
-  if (isListMode) {
-    const { nodes, pointers, status } = currentState;
-    const { prev, curr, nxt } = pointers || {};
-
-    return (
-      <div className="visual-stage-compact w-full max-w-[400px] mx-auto flex flex-col gap-8">
-        
-        {/* Pointer Legend */}
-        <div className="flex justify-center gap-6 text-xs font-bold uppercase tracking-wider">
-           <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500"></div> PREV
-           </div>
-           <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-cyan-400"></div> CURR
-           </div>
-           <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-purple-500"></div> NEXT
-           </div>
-        </div>
-
-        {/* Nodes Visualization */}
-        <div className="relative flex flex-wrap justify-center gap-12 py-8 px-4">
-            {nodes.map((node) => {
-                const isPrev = node.val === prev;
-                const isCurr = node.val === curr;
-                const isNext = node.val === nxt;
-
-                // Arrow Logic
-                let arrowType = 'none';
-                if (node.next !== null) {
-                    // Simple heuristic: if next val > curr val, it's forward, else backward
-                    if (node.next > node.val) arrowType = 'forward'; 
-                    else arrowType = 'backward';
-                }
-
-                return (
-                    <div key={node.id} className="relative flex flex-col items-center">
-                        
-                        {/* Node Circle */}
-                        <motion.div 
-                            className={`
-                                w-14 h-14 rounded-full border-2 flex items-center justify-center 
-                                text-lg font-bold bg-[#1e1e1e] z-10 transition-colors duration-300
-                                ${isCurr ? 'border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.4)] scale-110' : 
-                                  isPrev ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 
-                                  isNext ? 'border-purple-500' : 'border-gray-700 text-gray-500'}
-                            `}
-                            animate={{ scale: isCurr ? 1.15 : 1 }}
-                        >
-                            {node.val}
-                        </motion.div>
-
-                        {/* Labels */}
-                        <div className="absolute -top-8 flex flex-col items-center gap-1 w-20">
-                            {isPrev && <motion.span layoutId="p-lbl" className="text-[10px] text-emerald-500 font-bold bg-emerald-500/10 px-1 rounded">PREV</motion.span>}
-                            {isCurr && <motion.span layoutId="c-lbl" className="text-[10px] text-cyan-400 font-bold bg-cyan-400/10 px-1 rounded">CURR</motion.span>}
-                            {isNext && <motion.span layoutId="n-lbl" className="text-[10px] text-purple-500 font-bold bg-purple-500/10 px-1 rounded">NXT</motion.span>}
-                        </div>
-
-                        {/* Forward Arrow */}
-                        {arrowType === 'forward' && (
-                            <div className="absolute left-full top-1/2 -translate-y-1/2 w-12 h-[2px] bg-gray-600">
-                                <div className="absolute right-0 -top-[3px] border-t-[4px] border-t-transparent border-l-[6px] border-l-gray-600 border-b-[4px] border-b-transparent"></div>
-                            </div>
-                        )}
-
-                        {/* Backward Arrow (Curved) */}
-                        {arrowType === 'backward' && (
-                            <svg className="absolute top-12 left-1/2 w-full h-12 pointer-events-none z-0 overflow-visible">
-                                <path d="M 0 0 Q -20 25 -50 5" fill="none" stroke="#22c55e" strokeWidth="2" markerEnd="url(#arrowhead)" />
-                                <defs>
-                                    <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                                        <polygon points="0 0, 6 3, 0 6" fill="#22c55e" />
-                                    </marker>
-                                </defs>
-                            </svg>
-                        )}
-                        
-                        {node.next === null && (
-                            <div className="absolute -right-8 top-1/2 -translate-y-1/2 text-[10px] text-gray-600">NULL</div>
-                        )}
-                    </div>
-                )
-            })}
-        </div>
-
-        {/* Status */}
-        <div className="trace-group mt-2">
-             <div className="calc-card-modern text-center p-3">
-                 <div className="text-xs text-gray-400 mb-1 uppercase tracking-widest">Action</div>
-                 <div className="text-white font-mono text-sm">
-                     {status === 'start' && "Initializing..."}
-                     {status === 'current' && "Save next node (nxt = curr.next)"}
-                     {status === 'reverse' && <span className="text-emerald-400 font-bold">Reverse! (curr.next = prev)</span>}
-                     {status === 'move' && "Move pointers forward"}
-                 </div>
-             </div>
-        </div>
-      </div>
-    );
+// --- HELPER: FORMAT FINAL OUTPUT ---
+const formatReturnValue = (val) => {
+  if (val === null || val === undefined) return "None";
+  if (val && (val.class === 'ListNode' || (val.type === 'object' && val.data && val.data.val !== undefined))) {
+      const result = [];
+      let curr = val.data || val; 
+      let limit = 20; 
+      while (curr && limit > 0) {
+          result.push(curr.val);
+          if (curr.next && curr.next.data) curr = curr.next.data;
+          else if (curr.next) curr = curr.next;
+          else curr = null;
+          limit--;
+      }
+      if (limit === 0) result.push("...");
+      return `[${result.join(', ')}]`;
   }
+  if (Array.isArray(val)) return `[${val.join(', ')}]`;
+  return String(val);
+};
 
-  // ============================================
-  // 🔎 MODE 2: BINARY SEARCH (Sorted Array)
-  // ============================================
-  if (isBinarySearch) {
-    const { left, right, mid, status, val } = currentState;
+// 🟢 SMART CONTEXT RESOLVER (The "Brain")
+// Scans memory to explain WHY the result is correct
+const getSmartContext = (returnValue, memory) => {
+    // 1. Only applies if we returned an Index (Integer >= 0)
+    if (typeof returnValue !== 'number' || returnValue < 0) return null;
+
+    // 2. Find the 'Target' if it exists (e.g. 9)
+    const targetVar = Object.entries(memory).find(([key]) => key === 'target' || key === 'key' || key === 'val');
+    const targetVal = targetVar ? targetVar[1] : null;
+
+    // 3. Find the 'Array' (e.g. nums)
+    const listVar = Object.entries(memory).find(([key, val]) => Array.isArray(val) && key !== 'adapted_args');
     
-    return (
-      <div className="visual-stage-compact w-full max-w-[350px] mx-auto flex flex-col gap-6">
+    if (listVar) {
+        const [listName, listVal] = listVar;
+        const valAtIndex = listVal[returnValue];
+
+        // 4. GOLD MATCH: Does nums[index] == target?
+        if (targetVal !== null && valAtIndex === targetVal) {
+             return { 
+                 type: 'success', 
+                 msg: `Verified: ${listName}[${returnValue}] == ${targetVal}`
+             };
+        }
         
-        {/* Array Visualization */}
-        <div className="trace-group">
-          <span className="group-label">Sorted Array</span>
-          <div className="array-container">
-            {nums && nums.map((numVal, idx) => {
-              // Dim elements outside current search range
-              const isOutOfRange = idx < left || idx > right;
-              const isMid = idx === mid;
-              const isFound = status === 'found' && isMid;
+        // 5. SILVER MATCH: Just show the value at that index
+        // "Index 4 points to value 9"
+        return {
+            type: 'neutral',
+            msg: `Value at ${listName}[${returnValue}]: ${valAtIndex}`
+        };
+    }
+    return null;
+};
 
-              return (
-                <motion.div 
-                  key={idx} 
-                  className={`
-                    array-box relative 
-                    ${isMid ? 'border-amber-400 bg-amber-500/10' : ''}
-                    ${isFound ? '!border-green-500 !bg-green-500/20' : ''}
-                  `}
-                  style={{ 
-                    opacity: isOutOfRange ? 0.2 : 1,
-                    borderColor: isOutOfRange ? '#333' : undefined,
-                    filter: isOutOfRange ? 'grayscale(100%)' : 'none'
-                  }}
-                  animate={{ scale: isMid ? 1.15 : 1 }}
-                >
-                  <span className="index-label">{idx}</span>
-                  <span className="value">{numVal}</span>
-                  
-                  {/* Pointers L/R/M */}
-                  <div className="absolute -bottom-7 flex flex-col items-center gap-0.5 w-full">
-                    {idx === left && <motion.span layoutId="L" className="text-[10px] font-bold text-cyan-400 bg-cyan-900/30 px-1 rounded">L</motion.span>}
-                    {idx === right && <motion.span layoutId="R" className="text-[10px] font-bold text-purple-400 bg-purple-900/30 px-1 rounded">R</motion.span>}
-                    {idx === mid && status !== 'start' && <motion.span layoutId="M" className="absolute -top-16 text-[10px] font-bold text-amber-400 bg-amber-900/30 px-1 rounded">MID</motion.span>}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Logic Card */}
-        <div className="trace-group">
-          <span className="group-label">Search Logic</span>
-          <div className={`calc-card-modern ${status === 'found' ? 'border-green-500/50' : ''}`}>
-             <div className="flex justify-between items-center text-sm mb-3 border-b border-gray-700 pb-2">
-                 <span className="text-gray-400">Target</span>
-                 <span className="font-bold text-white text-lg">{target}</span>
-             </div>
-             
-             {status === 'start' && <div className="text-center text-sm text-gray-500 italic">Initializing Pointers...</div>}
-             
-             {status !== 'start' && (
-                 <>
-                    <div className="flex justify-between items-center text-sm font-mono mb-2">
-                        <span className="text-amber-400">nums[mid]</span>
-                        <span className="text-white text-lg">{val}</span>
-                    </div>
-                    
-                    <div className="bg-black/20 p-2 rounded text-center text-xs font-bold uppercase tracking-wider">
-                        {status === 'calc_mid' && <span className="text-gray-300">Comparing...</span>}
-                        {status === 'found' && <span className="text-green-400">Match Found! return {mid}</span>}
-                        {status === 'go_right' && <span className="text-cyan-400">{val} &lt; {target} → Too Small<br/>Move Left = Mid + 1</span>}
-                        {status === 'go_left' && <span className="text-purple-400">{val} &gt; {target} → Too Big<br/>Move Right = Mid - 1</span>}
-                    </div>
-                 </>
-             )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ============================================
-  // 📚 MODE 3: STACK (Valid Parentheses)
-  // ============================================
-  if (isStackMode) {
-     const { i, stack, char, status } = currentState;
-     const inputArr = inputString ? inputString.split('') : [];
-
-     return (
-        <div className="visual-stage-compact w-full max-w-[320px] mx-auto flex flex-col gap-6">
-           
-           {/* Input String Traversal */}
-           <div className="trace-group">
-                <span className="group-label">Input String</span>
-                <div className="array-container">
-                    {inputArr.map((val, idx) => (
-                        <div key={idx} className={`array-box ${i === idx ? 'active' : ''}`} style={{ width: '36px', height: '36px' }}>
-                            <span className="value text-sm">{val}</span>
-                            {i === idx && <motion.div layoutId="ptr-s" className="cursor-indicator" />}
-                        </div>
-                    ))}
-                </div>
-           </div>
-
-           {/* Current Action */}
-           <div className="trace-group">
-                <div className={`calc-card-modern text-center ${status === 'error' ? 'border-red-500/50' : status === 'match' ? 'border-green-500/50' : ''}`}>
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest">Current Char</span>
-                    <div className="text-2xl font-bold text-white my-1">{char || '-'}</div>
-                    <div className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-                        status === 'push' ? 'bg-blue-500/20 text-blue-300' :
-                        status === 'pop' ? 'bg-amber-500/20 text-amber-300' :
-                        status === 'match' ? 'bg-green-500/20 text-green-300' :
-                        status === 'error' ? 'bg-red-500/20 text-red-300' : 'text-gray-500'
-                    }`}>
-                        {status ? status.toUpperCase() : 'WAITING'}
-                    </div>
-                </div>
-           </div>
-
-           {/* Vertical Stack Visualization */}
-           <div className="trace-group">
-               <span className="group-label">Stack (LIFO)</span>
-               <div className="w-full flex flex-col-reverse items-center gap-2 bg-[#1e1e1e] border border-white/10 rounded-xl p-4 min-h-[160px] relative">
-                    <AnimatePresence>
-                        {stack.map((item, idx) => (
-                            <motion.div 
-                                key={`${idx}-${item}`}
-                                initial={{ opacity: 0, y: -30, scale: 0.8 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.15 } }}
-                                className="w-full h-8 bg-slate-700 border border-slate-600 rounded-md flex items-center justify-center text-white font-mono font-bold shadow-md text-sm"
-                            >
-                                {item}
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-                    {stack.length === 0 && (
-                        <div className="absolute inset-0 flex items-center justify-center text-gray-700 text-xs italic pointer-events-none">
-                            Stack Empty
-                        </div>
-                    )}
-               </div>
-           </div>
-        </div>
-     );
-  }
-
-  // ============================================
-  // 🔢 MODE 4: TWO SUM (Default Array)
-  // ============================================
-  const { i, seen, complement, status, matchIndex } = currentState;
+// --- RENDERERS (Standard) ---
+const RenderStack = ({ name, data, isActive }) => {
   return (
-    <div className="visual-stage-compact w-full max-w-[320px] mx-auto flex flex-col gap-6">
-        
-        {/* Input Array */}
-        <div className="trace-group">
-          <span className="group-label">Input Array</span>
-          <div className="array-container">
-            {nums && nums.map((val, idx) => {
-              const isCurrent = i === idx;
-              const isMatch = status === 'found' && (idx === i || idx === matchIndex);
-              return (
-                <motion.div 
-                    key={idx} 
-                    className={`array-box ${isCurrent ? 'active' : ''} ${isMatch ? 'found-success' : ''}`}
-                    animate={{ scale: isCurrent ? 1.1 : 1, borderColor: isMatch ? '#4ade80' : isCurrent ? '#22d3ee' : 'rgba(255,255,255,0.1)' }}
-                >
-                  <span className="index-label">{idx}</span>
-                  <span className="value">{val}</span>
-                  {isCurrent && <motion.div layoutId="ptr" className="cursor-indicator" />}
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
+    <div style={{ border: `2px solid ${isActive ? '#22d3ee' : '#334155'}`, background: '#0f172a', borderRadius: '0 0 8px 8px', borderTop: 'none', padding: '20px 10px 10px 10px', minHeight: '150px', minWidth: '80px', display: 'flex', flexDirection: 'column-reverse', alignItems: 'center', gap: '5px', position: 'relative' }}>
+      <div style={{ position: 'absolute', bottom: '-25px', fontSize: '12px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>{name}</div>
+      {data.length === 0 && <div style={{ color: '#334155', fontSize: '10px', marginTop: '20px' }}>EMPTY</div>}
+      <AnimatePresence>
+        {data.map((val, idx) => (
+          <motion.div key={idx} initial={{ opacity: 0, y: -20, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.5 }} transition={{ type: "spring", stiffness: 300, damping: 20 }} style={{ width: '60px', height: '30px', background: '#1e293b', border: '1px solid #475569', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', position: 'relative' }}>
+            {String(val)}
+            {idx === data.length - 1 && <div style={{ position: 'absolute', right: '-40px', color: '#22d3ee', fontSize: '10px', display: 'flex', alignItems: 'center' }}>← TOP</div>}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+};
 
-        {/* Calculation Logic */}
-        <div className="trace-group">
-          <span className="group-label">Logic</span>
-          <div className={`calc-card-modern ${status === 'found' ? 'border-green-500/50 bg-green-500/10' : ''}`}>
-             {i === -1 ? <div className="text-gray-500 text-sm text-center italic">Starting...</div> : (
-               <>
-                 <div className="calc-row"><span className="calc-label text-gray-400">Target</span><span className="calc-val">{target}</span></div>
-                 <div className="calc-divider text-gray-600 my-1 text-center">-</div>
-                 <div className="calc-row"><span className="calc-label text-gray-400">Current</span><span className="calc-val text-cyan-400">{nums[i]}</span></div>
-                 <div className="calc-divider-main bg-gray-700 h-px my-3"></div>
-                 <div className="calc-row"><span className="calc-label text-gray-400">Need</span><span className="calc-val-highlight text-white">{complement}</span></div>
-               </>
-             )}
-          </div>
-        </div>
+const RenderLinkedListNode = ({ name, data, isActive }) => {
+  const value = data && data.val !== undefined ? data.val : (data !== null ? data : "null");
+  return (
+    <motion.div layout animate={{ scale: isActive ? 1.1 : 1, borderColor: isActive ? '#22d3ee' : '#334155' }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '10px', position: 'relative' }}>
+      <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{name}</div>
+      <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: '#0f172a', border: '2px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>{String(value)}</div>
+      {value !== "null" && <div style={{ position: 'absolute', right: '-20px', top: '35px', color: '#475569' }}>➜</div>}
+    </motion.div>
+  );
+};
 
-        {/* Hashmap Table */}
-        <div className="trace-group">
-          <span className="group-label">Hashmap</span>
-          <div className="hashmap-mini-card">
-            <table className="modern-table w-full">
-              <thead><tr><th className="text-left p-2 text-gray-500 text-xs">Key</th><th className="text-right p-2 text-gray-500 text-xs">Index</th></tr></thead>
-              <tbody>
-                {Object.entries(seen || {}).map(([k, v]) => (
-                  <tr key={k}><td className="p-2 text-sm text-white border-t border-white/5">{k}</td><td className="p-2 text-sm text-cyan-400 text-right border-t border-white/5">{v}</td></tr>
-                ))}
-                {Object.keys(seen || {}).length === 0 && <tr><td colSpan="2" className="p-4 text-center text-xs text-gray-600 italic">Empty</td></tr>}
-              </tbody>
-            </table>
-          </div>
+const RenderList = ({ name, data, isActive }) => (
+  <div style={{ border: `1px solid ${isActive ? '#22d3ee' : '#334155'}`, padding: '12px', borderRadius: '8px' }}>
+    <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>{name}</div>
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+      {data.map((val, idx) => (
+        <div key={idx} style={{ padding: '4px 8px', background: '#0f172a', border: '1px solid #334155', color: '#fff', borderRadius: '4px', fontSize: '13px' }}>{String(val)}</div>
+      ))}
+    </div>
+  </div>
+);
+
+const RenderMap = ({ name, data, isActive }) => (
+  <div style={{ border: `1px solid ${isActive ? '#22d3ee' : '#334155'}`, padding: '12px', borderRadius: '8px' }}>
+    <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase' }}>{name}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      {Object.entries(data).map(([key, val]) => (
+        <div key={key} style={{ display: 'flex', fontSize: '13px', fontFamily: 'monospace' }}>
+          <span style={{ color: '#94a3b8', marginRight: '8px' }}>{JSON.stringify(key)}:</span>
+          <span style={{ color: '#fff' }}>{JSON.stringify(val)}</span>
         </div>
+      ))}
+    </div>
+  </div>
+);
+
+const RenderPrimitive = ({ name, value, isActive, theme }) => (
+  <motion.div animate={{ backgroundColor: theme ? theme.bg : '#1e1e1e', borderColor: theme ? theme.border : (isActive ? '#22d3ee' : '#334155') }} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderRadius: '8px', border: '1px solid' }}>
+    <span style={{ color: '#94a3b8', fontSize: '13px' }}>{name}</span>
+    <span style={{ color: theme ? theme.color : '#fff', fontWeight: 'bold' }}>{String(value)}</span>
+  </motion.div>
+);
+
+// --- MAIN COMPONENT ---
+const VisualTrace = ({ currentState }) => {
+  if (!currentState) return <div style={{ color: '#64748b', padding: '20px' }}>Initializing...</div>;
+
+  const { memory, activeTarget, isError, line, isReturn, returnValue, resultColor, resultLabel, status } = currentState;
+
+  if (isError) return <div style={{ padding: '20px', color: '#ef4444' }}>Error: {status}</div>;
+
+  const primitives = [];
+  const nodes = [];
+  const structures = []; 
+  const stacks = [];
+
+  Object.entries(memory || {}).forEach(([name, val]) => {
+    if (name.startsWith('__') || name === 'result') return; 
+    
+    // HEURISTIC: Stack detection
+    if (name.toLowerCase().includes('stack') && Array.isArray(val)) {
+        stacks.push({ name, val });
+        return;
+    }
+
+    const isNode = (val && val.class === 'ListNode') || (val && val.type === 'object' && val.data && val.data.val !== undefined);
+    
+    if (isNode) nodes.push({ name, val: val.data || val });
+    else if (Array.isArray(val)) structures.push({ name, val, isList: true });
+    else if (typeof val === 'object' && val !== null) structures.push({ name, val, isList: false });
+    else primitives.push({ name, val });
+  });
+
+  const returnType = Array.isArray(returnValue) ? 'LIST' : (typeof returnValue === 'object' ? 'OBJECT' : typeof returnValue === 'number' ? 'NUMBER' : 'VALUE');
+  
+  // 🟢 CALCULATE SMART CONTEXT
+  const contextHint = isReturn ? getSmartContext(returnValue, memory) : null;
+
+  return (
+    <div style={{ padding: '15px', display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'Inter, sans-serif' }}>
+      
+      {/* STATUS BAR */}
+      <div style={{ background: isReturn ? `${resultColor}1A` : '#111827', border: `1px solid ${isReturn ? resultColor : '#1f2937'}`, borderRadius: '8px', padding: '12px', display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ color: isReturn ? resultColor : '#22d3ee', fontSize: '13px', fontWeight: 'bold' }}>{isReturn ? `🏁 ${resultLabel}` : status}</span>
+        <span style={{ color: '#64748b', fontSize: '10px' }}>LINE {line}</span>
+      </div>
+
+      {/* FINAL RESULT CARD */}
+      {isReturn && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ background: `${resultColor}1A`, border: `1px solid ${resultColor}`, borderRadius: '12px', padding: '20px', textAlign: 'center', position: 'relative' }}>
+          
+          {/* Badge */}
+          <div style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '9px', background: resultColor, color: '#000', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+             {returnType}
+          </div>
+          
+          <div style={{ fontSize: '10px', color: resultColor, marginBottom: '8px' }}>FINAL OUTPUT</div>
+          
+          {/* Main Result */}
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{formatReturnValue(returnValue)}</div>
+          
+          {/* 🟢 SMART CONTEXT MESSAGE */}
+          {contextHint && (
+              <motion.div 
+                initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                style={{ 
+                    marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(255,255,255,0.1)',
+                    fontSize: '11px', color: contextHint.type === 'success' ? '#4ade80' : '#94a3b8',
+                    fontFamily: 'monospace'
+                }}>
+                  {contextHint.msg}
+              </motion.div>
+          )}
+        </motion.div>
+      )}
+
+      <div style={{ opacity: isReturn ? 0.6 : 1 }}>
+        {stacks.length > 0 && <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px' }}>{stacks.map(s => <RenderStack key={s.name} name={s.name} data={s.val} isActive={s.name === activeTarget} />)}</div>}
+        {nodes.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>{nodes.map(n => <RenderLinkedListNode key={n.name} name={n.name} data={n.val} isActive={n.name === activeTarget} />)}</div>}
+        {primitives.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>{primitives.map(p => <RenderPrimitive key={p.name} name={p.name} value={p.val} isActive={p.name === activeTarget} theme={isReturn ? { color: resultColor, bg: `${resultColor}1A`, border: resultColor } : null} />)}</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>{structures.map(s => (s.isList ? <RenderList key={s.name} name={s.name} data={s.val} isActive={s.name === activeTarget} /> : <RenderMap key={s.name} name={s.name} data={s.val} isActive={s.name === activeTarget} />))}</div>
+      </div>
     </div>
   );
 };

@@ -38,17 +38,20 @@ export default {
   id: "binary-search",
   title: "704. Binary Search",
   difficulty: "Easy",
+  type: "array", // 🟢 Uses default adapter (Array works natively)
   description: <BinarySearchDescription />,
   
-  // 1. EXECUTION CONFIG
+  // 🟢 CONTRACT DEFINITION
   entryFunction: "search",
   inputVariables: ["nums", "target"],
 
+  // 🟢 STANDARD PYTHON SOLUTION
   defaultCode: `def search(nums, target):
     left, right = 0, len(nums) - 1
 
     while left <= right:
         mid = (left + right) // 2
+        
         if nums[mid] == target:
             return mid
         elif nums[mid] < target:
@@ -58,78 +61,28 @@ export default {
 
     return -1`,
 
-  // 2. VISUALIZATION DATA
+  // 🟢 CLEAN VISUAL DATA
   visualData: {
     nums: [-1, 0, 3, 5, 9, 12],
     target: 9
   },
   
-  // 3. TRACE SCRIPT
-  getTraceScript: (visualData) => {
-    const nums = JSON.stringify(visualData.nums);
-    const target = visualData.target;
-    return `
-import json
-def trace_binary_search(nums, target):
-    steps = []
-    left, right = 0, len(nums) - 1
-    
-    # Initial State
-    steps.append({
-        "left": left, "right": right, "mid": -1, 
-        "val": None, "status": "start"
-    })
-
-    while left <= right:
-        mid = (left + right) // 2
-        
-        # Step: Calculate Mid
-        steps.append({
-            "left": left, "right": right, "mid": mid, 
-            "val": nums[mid], "status": "calc_mid"
-        })
-
-        if nums[mid] == target:
-            # Step: Found
-            steps.append({
-                "left": left, "right": right, "mid": mid, 
-                "val": nums[mid], "status": "found"
-            })
-            break
-        elif nums[mid] < target:
-            # Step: Move Right
-            left = mid + 1
-            steps.append({
-                "left": left, "right": right, "mid": mid, 
-                "val": nums[mid], "status": "go_right"
-            })
-        else:
-            # Step: Move Left
-            right = mid - 1
-            steps.append({
-                "left": left, "right": right, "mid": mid, 
-                "val": nums[mid], "status": "go_left"
-            })
-
-    return json.dumps(steps)
-
-trace_binary_search(${nums}, ${target})
-`;
-  },
-
-  // 4. TEST CASES
+  // 🟢 CLEAN TEST CASES (Pure JSON)
   testCases: [
     {
-      input: "nums = [-1,0,3,5,9,12]\ntarget = 9",
-      expected: "4"
+      nums: [-1, 0, 3, 5, 9, 12],
+      target: 9,
+      expected: 4
     },
     {
-      input: "nums = [-1,0,3,5,9,12]\ntarget = 2",
-      expected: "-1"
+      nums: [-1, 0, 3, 5, 9, 12],
+      target: 2,
+      expected: -1
     },
     {
-      input: "nums = [5]\ntarget = 5",
-      expected: "0"
+      nums: [5],
+      target: 5,
+      expected: 0
     }
   ]
 };

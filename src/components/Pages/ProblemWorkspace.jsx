@@ -1,30 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
-import { RotateCcw, Play, Settings } from 'lucide-react'; 
+import { Settings } from 'lucide-react'; 
 import { PROBLEM_MAPPING } from '../../problems'; 
 import VisualizerRenderer from '../Workspace/VisualizerRenderer'; 
 import ExecutionConsole from '../Workspace/ExecutionConsole'; 
 import { usePyodide } from '../../hooks/usePyodide'; 
-import { useView } from '../../context/ViewContext'; // Import View Context
+import { useView } from '../../context/ViewContext';
+import { transformEventTrace, transformDynamicTrace } from '../../utils/traceTransformers';
+
+// 🟢 LINKED LIST HELPER (Injected into Python)
+const LIST_NODE_HELPER = `
+class ListNode:
+    def __init__(self, val=0, next=None):
+        self.val = val
+        self.next = next
+    def __repr__(self):
+        return str(self.val)
+
+def create_list(arr):
+    if not arr: return None
+    nodes = [ListNode(x) for x in arr]
+    for i in range(len(nodes) - 1):
+        nodes[i].next = nodes[i+1]
+    return nodes[0]
+`;
 
 const ProblemWorkspace = () => {
   const { problemId } = useParams();
-  const { activeTab } = useView(); // Get active tab from Header
+  const { activeTab } = useView(); 
+  
   const [problem, setProblem] = useState(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
-  
-  // Custom Visualization State
+  const [currentLine, setCurrentLine] = useState(null);
   const [showVisualInput, setShowVisualInput] = useState(false);
   const [customVisualData, setCustomVisualData] = useState(""); 
-
-  // Engine Hooks
-  const { runCode, generateTrace, loading: engineLoading } = usePyodide();
-  
   const [output, setOutput] = useState(null);
   const [traceData, setTraceData] = useState([]);
+  const [isVisualizing, setIsVisualizing] = useState(false);
 
+  const editorRef = useRef(null);
+  const decorationsRef = useRef([]);
+
+  const { runCode, generateDynamicTrace, loading: engineLoading } = usePyodide();
+
+  // 1. Load Problem
   useEffect(() => {
     const loadProblem = async () => {
       setLoading(true);
@@ -35,218 +56,252 @@ const ProblemWorkspace = () => {
           const data = module.default;
           setProblem(data);
           setCode(data.defaultCode);
-          setTraceData([]);
-          
-          if (data.visualData) {
-            setCustomVisualData(JSON.stringify(data.visualData, null, 2));
-          }
-        } catch (err) {
-          console.error("Failed to load problem:", err);
-        }
+          if (data.visualData) setCustomVisualData(JSON.stringify(data.visualData, null, 2));
+        } catch (err) { console.error(err); }
       }
       setLoading(false);
     };
     loadProblem();
   }, [problemId]);
 
-  // Update Document Title based on current problem
+  // 2. Window Title
   useEffect(() => {
-    if (problem) {
-      document.title = `DSA Lens - ${problem.title}`;
-    }
-    
-    // Cleanup: Reset title when component unmounts
-    return () => {
-      document.title = "DSA Lens";
-    };
+    if (problem) document.title = `DSA Lens - ${problem.title}`;
+    return () => { document.title = "DSA Lens"; };
   }, [problem]);
 
-  // 1. RUN CODE
+  const handleEditorDidMount = (editor) => { editorRef.current = editor; };
+
+  // 3. Highlight Line
+  useEffect(() => {
+    if (editorRef.current && currentLine && window.monaco) {
+      const editor = editorRef.current;
+      const newDecorations = [{
+        range: new window.monaco.Range(currentLine, 1, currentLine, 1),
+        options: { isWholeLine: true, className: 'active-line-highlight' },
+      }];
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
+    }
+  }, [currentLine]);
+
+  // 4. Run (Console Only)
+  // 🟢 ROBUST HANDLE RUN
   const handleRun = async () => {
-    if (!problem || !problem.testCases) { alert("Test cases missing!"); return; }
+    if (!problem) return;
     setOutput({ status: "running" });
+    
+    const isList = problem.type === 'linked-list';
+    
+    // 1. Auto-detect user's function name
+    let entryFunc = problem.entryFunction;
+    const functionMatch = code.match(/^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/m);
+    if (functionMatch && functionMatch[1]) entryFunc = functionMatch[1];
 
-    const { results, error } = await runCode(
-        code, 
-        problem.testCases, 
-        problem.entryFunction, 
-        problem.inputVariables
-    );
+    let codeToRun = code;
+    let testCasesToRun = problem.testCases;
+    let entryToRun = entryFunc;
+    let inputsToRun = problem.inputVariables;
 
+    // 2. LINKED LIST WRAPPERS
+    if (isList) {
+        // A. Inject Helpers
+        const LIST_WRAPPERS = `
+${LIST_NODE_HELPER}
+
+def list_to_array(head):
+    arr = []
+    curr = head
+    while curr:
+        arr.append(curr.val)
+        curr = curr.next
+    return arr
+
+def test_wrapper(arr):
+    # Handle edge case where arr might be None or not a list
+    if arr is None: arr = []
+    if not isinstance(arr, list): arr = [] 
+    
+    head = create_list(arr)
+    result_head = ${entryFunc}(head)
+    return list_to_array(result_head)
+`;
+        codeToRun = `${code}\n\n${LIST_WRAPPERS}`;
+        entryToRun = "test_wrapper";
+        inputsToRun = ['arr'];
+        
+        // B. Normalize Test Cases (THE CRITICAL FIX)
+        testCasesToRun = problem.testCases.map(tc => {
+            // We aggressively search for the array data
+            // Some problem files use 'input', some 'head', some 'values'
+            let val = [];
+            if (Array.isArray(tc.input)) val = tc.input;
+            else if (Array.isArray(tc.head)) val = tc.head;
+            else if (Array.isArray(tc.values)) val = tc.values;
+            else if (Array.isArray(tc.nums)) val = tc.nums;
+            else if (Array.isArray(tc.arr)) val = tc.arr;
+            
+            // Debug check
+            if (val.length === 0 && tc.input) console.warn("Potential parsing issue:", tc);
+
+            return { 
+                ...tc, 
+                arr: val // Standardize key for the wrapper
+            };
+        });
+    }
+
+    console.log(`🚀 Running ${isList ? 'Linked List Mode' : 'Standard Mode'}`);
+
+    // 3. Execute
+    const { results, error } = await runCode(codeToRun, testCasesToRun, entryToRun, inputsToRun);
+    
     if (error) {
-      setOutput({ status: "error", message: error });
+        setOutput({ status: "error", message: error });
     } else {
-      setOutput({ status: "success", cases: results });
-      // Only visualize if the panel is actually visible/supported
-      if (!problem.hideLiveTrace) {
-          handleVisualize(JSON.parse(customVisualData)); 
-      }
+        setOutput({ status: "success", cases: results });
+        
+        // Auto-visualize if successful
+        let inputData = problem.visualData;
+        try { inputData = JSON.parse(customVisualData); } catch(e) {}
+        handleVisualize(inputData);
     }
   };
 
-  // 2. GENERATE TRACE
+  // 🟢 5. SMART VISUALIZE (The Fix)
   const handleVisualize = async (dataToVisualize) => {
-      if (problem.getTraceScript) {
-        try {
-            const script = problem.getTraceScript(dataToVisualize);
-            const steps = await generateTrace(script);
-            setTraceData(steps);
-            setProblem(prev => ({ ...prev, visualData: dataToVisualize }));
-        } catch (traceErr) {
-            console.error("Trace generation failed", traceErr);
-        }
-      }
-  };
+    setIsVisualizing(true);
+    setTraceData([]);
+    setCurrentLine(0);
 
-  // 3. HANDLE CUSTOM INPUT SUBMIT
-  const handleCustomSubmit = () => {
-      try {
-          const parsedData = JSON.parse(customVisualData);
-          handleVisualize(parsedData);
-          setShowVisualInput(false);
-      } catch (e) {
-          alert("Invalid JSON format.");
+    try {
+      const isList = problem.type === 'linked-list';
+      
+      // A. ROBUST FUNCTION DETECTION
+      // We ignore the config and find what the user ACTUALLY wrote
+      let entryFunc = problem.entryFunction;
+      const functionMatch = code.match(/^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/m);
+      if (functionMatch && functionMatch[1]) {
+          entryFunc = functionMatch[1];
+          console.log(`🔎 Detected user function: ${entryFunc}`);
       }
-  };
 
-  const handleReset = () => {
-    if (problem) {
-      setCode(problem.defaultCode);
-      setOutput(null);
-      setTraceData([]);
+      // B. PREPARE WRAPPER
+      let fullCode = code;
+      
+      if (isList) {
+          // Wrap it so Python creates a list and calls the detected function
+          fullCode = `${LIST_NODE_HELPER}\n${code}\n\ndef dynamic_entry(arr):\n    h = create_list(arr)\n    ${entryFunc}(h)`;
+          entryFunc = "dynamic_entry";
+      }
+
+      // C. PREPARE ARGS
+      let inputArgs = [];
+      if (isList) {
+           inputArgs = [dataToVisualize.values || dataToVisualize.nums || dataToVisualize.head || [1, 2, 3, 4, 5]];
+      } else {
+           inputArgs = [
+               dataToVisualize.nums || dataToVisualize.values || [], 
+               dataToVisualize.target
+           ];
+      }
+      
+      console.log("🚀 SENDING CODE:", fullCode);
+      console.log("🚀 SENDING ARGS:", inputArgs);
+
+      // D. EXECUTE
+      const raw = await generateDynamicTrace(fullCode, entryFunc, inputArgs);
+      
+      console.group("🔍 AST TRACE DEBUGGER");
+      console.log("🔥 RAW PYTHON EVENTS:", raw);
+      
+      if (!raw || raw.length === 0) {
+        console.warn("⚠️ Python returned empty trace. Check console for Pyodide errors.");
+        console.groupEnd();
+        setIsVisualizing(false);
+        return;
+      }
+      
+      // E. TRANSFORM
+      const isEventStream = raw[0] && (raw[0].event !== undefined);
+      let steps = [];
+      
+      if (isEventStream) {
+          console.log("⚙️ Using NEW EVENT TRANSFORMER");
+          steps = transformEventTrace(raw);
+      } else {
+          console.log("🐢 Using LEGACY SNAPSHOT TRANSFORMER");
+          steps = transformDynamicTrace(raw, problem.type);
+      }
+
+      console.log("✨ TRANSFORMED UI FRAMES:", steps);
+      console.groupEnd();
+
+      if (steps && steps.length > 0) {
+        setTraceData(steps);
+        if (steps[0]) setCurrentLine(steps[0].line);
+      }
+
+    } catch (error) {
+      console.error("❌ VISUALIZATION CRASH:", error);
+    } finally {
+      setIsVisualizing(false);
     }
   };
 
-  if (loading) return <div style={{ padding: '80px', color: 'white' }}>Loading Workspace...</div>;
-  if (!problem) return <div style={{ padding: '80px', color: 'white' }}>Problem not found.</div>;
+  if (loading) return <div style={{ padding: '80px', color: 'white' }}>Loading...</div>;
+  if (!problem) return <div style={{ padding: '80px', color: 'white' }}>Not found.</div>;
 
-  // VIEW LOGIC
-  if (activeTab === 'visualizer') {
-      return (
-        <div style={{ marginTop: '70px', height: 'calc(100vh - 70px)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-          <h1 className="text-3xl font-bold mb-4">Dedicated Visualizer</h1>
-          <p className="text-gray-400">Complex visualization for {problem.title} will appear here.</p>
-        </div>
-      );
-  }
-
-  if (activeTab === 'learn') {
-      return (
-        <div style={{ marginTop: '70px', height: 'calc(100vh - 70px)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <h1 className="text-2xl">Learning Material for {problem.title}</h1>
-        </div>
-      );
-  }
-
-  // 🟢 DETERMINE IF RIGHT PANEL SHOULD SHOW
   const showRightPanel = !problem.hideLiveTrace;
 
   return (
     <div style={{ display: 'flex', marginTop: '75px', height: 'calc(100vh - 60px)', width: '100%', backgroundColor: '#0a0a0f', color: 'white', overflow: 'hidden' }}>
       
-      {/* LEFT PANEL (Description) */}
+      {/* LEFT PANEL */}
       <aside style={{ width: '350px', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#0f172a' }}>
         <div style={{ padding: '24px', borderBottom: '1px solid #1f2937' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>{problem.title}</h1>
-            <span style={{
-                display: 'inline-block', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '600',
-                backgroundColor: problem.difficulty === 'Easy' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
-                color: problem.difficulty === 'Easy' ? '#4ade80' : '#facc15', 
-                border: `1px solid ${problem.difficulty === 'Easy' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)'}`
-            }}>
-                {problem.difficulty}
-            </span>
+            <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.2)' }}>{problem.difficulty}</span>
         </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-          <div style={{ color: '#d1d5db', lineHeight: '1.75', fontSize: '14px' }}>
-            {problem.description}
-          </div>
-        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '24px', color: '#d1d5db', fontSize: '14px' }}>{problem.description}</div>
       </aside>
 
-      {/* MIDDLE PANEL (Editor + Console) */}
-      <div style={{ 
-          flex: 1, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          overflow: 'hidden', 
-          // 🟢 Only show border if right panel exists
-          borderRight: showRightPanel ? '1px solid #1f2937' : 'none', 
-          backgroundColor: '#1e1e1e' 
-      }}>
-        <div style={{ flex: 2, display: 'flex', flexDirection: 'column', borderBottom: '1px solid #1f2937', overflow: 'hidden' }}>
+      {/* MIDDLE PANEL */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: showRightPanel ? '1px solid #1f2937' : 'none', backgroundColor: '#1e1e1e' }}>
+        <div style={{ flex: 2, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: showRightPanel ? '1px solid #1f2937' : 'none', backgroundColor: '#1e1e1e' }}>
           <div style={{ height: '50px', padding: '0 16px', backgroundColor: '#1e1e1e', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#60a5fa', boxShadow: '0 0 8px rgba(96,165,250,0.6)' }}></span>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#d1d5db' }}>PYTHON 3</span>
-             </div>
+             <span style={{ fontSize: '12px', color: '#9ca3af' }}>PYTHON 3</span>
              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={handleReset} style={{ padding: '6px 12px', fontSize: '12px', background: 'transparent', color: '#9ca3af', border: '1px solid #374151', borderRadius: '4px', cursor: 'pointer' }}>Reset</button>
-                <button onClick={handleRun} disabled={engineLoading} style={{ 
-                    padding: '6px 16px', fontSize: '12px', background: engineLoading ? '#374151' : 'rgba(34, 197, 94, 0.1)', 
-                    color: engineLoading ? '#6b7280' : '#4ade80', border: `1px solid ${engineLoading ? 'transparent' : 'rgba(34, 197, 94, 0.5)'}`,
-                    borderRadius: '4px', cursor: engineLoading ? 'not-allowed' : 'pointer', fontWeight: '600', textTransform: 'uppercase'
-                }}>
-                    {engineLoading ? 'Running...' : 'Run'}
+                <button onClick={handleRun} disabled={engineLoading} style={{ padding: '6px 16px', fontSize: '12px', background: 'rgba(34, 197, 94, 0.1)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.5)', borderRadius: '4px', cursor: 'pointer' }}>
+                    {engineLoading ? 'RUNNING...' : 'RUN'}
                 </button>
              </div>
           </div>
           <div style={{ flex: 1, position: 'relative' }}>
-             <Editor height="100%" width="100%" theme="vs-dark" defaultLanguage="python" value={code} onChange={(v) => setCode(v || "")} options={{ minimap: { enabled: false }, fontSize: 14, automaticLayout: true, padding: { top: 16 } }} />
+             <Editor height="100%" theme="vs-dark" defaultLanguage="python" value={code} onMount={handleEditorDidMount} onChange={(v) => setCode(v || "")} options={{ minimap: { enabled: false }, fontSize: 14 }} />
           </div>
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0f', overflow: 'hidden' }}>
-           <div style={{ padding: '8px 16px', backgroundColor: '#111827', borderBottom: '1px solid #1f2937', display: 'flex', alignItems: 'center' }}>
-             <span style={{ fontSize: '12px', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>Output Console</span>
-           </div>
-           <div style={{ flex: 1, overflow: 'auto' }}>
-             <ExecutionConsole output={output} />
-           </div>
+        <div style={{ flex: 1, backgroundColor: '#0a0a0f', overflow: 'hidden' }}>
+           <ExecutionConsole output={output} />
         </div>
       </div>
 
-      {/* RIGHT PANEL - LIVE VISUALIZATION (Conditionally Rendered) */}
+      {/* RIGHT PANEL */}
       {showRightPanel && (
-          <section style={{ width: '350px', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#0f172a' }}>
-            <div style={{ padding: '0 16px', backgroundColor: '#111827', borderBottom: '1px solid #1f2937', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#9ca3af' }}>Live Memory View</span>
-              
-              {/* CUSTOM INPUT TRIGGER */}
-              <button 
-                 onClick={() => setShowVisualInput(!showVisualInput)}
-                 className={`p-1.5 rounded transition-colors ${showVisualInput ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-gray-700 text-gray-400'}`}
-                 title="Edit Inputs"
-              >
-                 <Settings size={16} />
-              </button>
+        <section style={{ width: '450px', display: 'flex', flexDirection: 'column', backgroundColor: '#0f172a', flexShrink: 0 }}>
+            <div style={{ padding: '0 16px', height: '50px', borderBottom: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '14px', color: '#9ca3af' }}>Live Memory View</span>
+              <Settings size={16} onClick={() => setShowVisualInput(!showVisualInput)} style={{ cursor: 'pointer' }} />
             </div>
-            
-            {/* CUSTOM INPUT FORM */}
             {showVisualInput && (
-                <div className="p-4 bg-[#1e293b] border-b border-gray-700 flex flex-col gap-2 animate-in slide-in-from-top duration-200">
-                    <label className="text-xs text-gray-400 font-bold uppercase">Custom Input (JSON)</label>
-                    <textarea 
-                        value={customVisualData}
-                        onChange={(e) => setCustomVisualData(e.target.value)}
-                        className="w-full h-24 bg-[#0f172a] border border-gray-600 rounded p-2 text-xs font-mono text-green-400 focus:outline-none focus:border-blue-500 resize-none"
-                        spellCheck="false"
-                    />
-                    <button 
-                        onClick={handleCustomSubmit}
-                        className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition-colors"
-                    >
-                        Visualize This Data
-                    </button>
-                </div>
+              <div style={{ padding: '16px', borderBottom: '1px solid #1f2937', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <textarea value={customVisualData} onChange={(e) => setCustomVisualData(e.target.value)} style={{ width: '100%', height: '80px', backgroundColor: '#0a0a0f', color: '#4ade80', fontSize: '12px', padding: '8px' }} />
+                <button onClick={() => handleVisualize(JSON.parse(customVisualData))} style={{ backgroundColor: '#2563eb', color: 'white', padding: '6px', fontSize: '12px' }}>Update Data</button>
+              </div>
             )}
-
-            <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-              <VisualizerRenderer 
-                traceSteps={traceData} 
-                visualData={problem.visualData} 
-              />
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+              <VisualizerRenderer traceSteps={traceData} visualData={problem.visualData} onStepChange={(line) => setCurrentLine(line)} />
             </div>
-          </section>
+        </section>
       )}
     </div>
   );

@@ -63,78 +63,44 @@ export default {
   id: "valid-parentheses",
   title: "20. Valid Parentheses",
   difficulty: "Easy",
-  type: "stack",
-  hideLiveTrace: true,    // 🔴 HIDES right panel in Editor tab
+  type: "stack", // Falls back to default adapter (Lists work natively)
   description: <ValidParenthesesDescription />,
   
-  // EXECUTION CONFIG
+  // 🟢 CONTRACT DEFINITION
   entryFunction: "isValid",
   inputVariables: ["s"],
 
+  // 🟢 STANDARD PYTHON SOLUTION
   defaultCode: `def isValid(s):
     stack = []
     mapping = {')': '(', '}': '{', ']': '['}
 
     for char in s:
         if char in mapping:
-            top = stack.pop() if stack else '#'
-            if mapping[char] != top:
+            # Pop the top element if stack is not empty, else assign a dummy value
+            top_element = stack.pop() if stack else '#'
+            
+            # The mapping for the closing bracket must match the popped element
+            if mapping[char] != top_element:
                 return False
         else:
+            # We have an opening bracket, push it onto the stack
             stack.append(char)
 
+    # If the stack is empty, then it is a valid string
     return not stack`,
 
-  // VISUALIZATION CONFIG
+  // 🟢 CLEAN VISUAL DATA (Matches inputVariables)
   visualData: {
-    input: "()[]{}" 
+    s: "()[]{}" 
   },
 
-  // 🟢 NEW: PYTHON SCRIPT TO GENERATE STACK TRACE
-  getTraceScript: (visualData) => {
-    const inputStr = JSON.stringify(visualData.input);
-    return `
-import json
-def trace_valid_parentheses(s):
-    steps = []
-    stack = []
-    mapping = {')': '(', '}': '{', ']': '['}
-    
-    steps.append({ "i": -1, "stack": [], "char": None, "status": "start" })
-    
-    for i, char in enumerate(s):
-        # Step: Inspect Char
-        steps.append({ "i": i, "stack": list(stack), "char": char, "status": "inspect" })
-        
-        if char in mapping:
-            # Step: Attempt Pop
-            steps.append({ "i": i, "stack": list(stack), "char": char, "status": "pop" })
-            
-            top = stack.pop() if stack else '#'
-            
-            if mapping[char] != top:
-                # Step: Mismatch
-                steps.append({ "i": i, "stack": list(stack), "char": char, "status": "error" })
-                break
-            else:
-                 # Step: Match Found
-                 steps.append({ "i": i, "stack": list(stack), "char": char, "status": "match" })
-        else:
-            stack.append(char)
-            # Step: Push
-            steps.append({ "i": i, "stack": list(stack), "char": char, "status": "push" })
-
-    return json.dumps(steps)
-
-trace_valid_parentheses(${inputStr})
-`;
-  },
-
+  // 🟢 CLEAN TEST CASES (Pure JSON)
   testCases: [
-    { input: "s = \"()\"", expected: "True" },
-    { input: "s = \"()[]{}\"", expected: "True" },
-    { input: "s = \"(]\"", expected: "False" },
-    { input: "s = \"([)]\"", expected: "False" },
-    { input: "s = \"{[]}\"", expected: "True" }
+    { s: "()", expected: true },
+    { s: "()[]{}", expected: true },
+    { s: "(]", expected: false },
+    { s: "([)]", expected: false },
+    { s: "{[]}", expected: true }
   ]
 };
