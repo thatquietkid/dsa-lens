@@ -4,11 +4,11 @@ import React from "react";
 const ValidParenthesesDescription = () => (
   <div>
     <p className="prob-text">
-      Given a string <code>s</code> containing just the characters{" "}
-      <code>'('</code>, <code>')'</code>, <code>'{'</code>, <code>'}'</code>,{" "}
-      <code>'['</code> and <code>']'</code>, determine if the input string is
-      valid.
-    </p>
+  Given a string <code>s</code> containing just the characters{" "}
+  <code>(</code>, <code>)</code>, <code>{'{'}</code>, <code>{'}'}</code>,{" "}
+  <code>[</code> and <code>]</code>, determine if the input string is valid.
+</p>
+
 
     <p className="prob-text">An input string is valid if:</p>
 

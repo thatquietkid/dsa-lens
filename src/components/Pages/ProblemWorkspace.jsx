@@ -9,7 +9,7 @@ import { usePyodide } from '../../hooks/usePyodide';
 import { useView } from '../../context/ViewContext';
 import { transformEventTrace, transformDynamicTrace } from '../../utils/traceTransformers';
 
-// 🟢 LINKED LIST HELPER (Injected into Python)
+// 🟢 LINKED LIST HELPER
 const LIST_NODE_HELPER = `
 class ListNode:
     def __init__(self, val=0, next=None):
@@ -28,7 +28,6 @@ def create_list(arr):
 
 const ProblemWorkspace = () => {
   const { problemId } = useParams();
-  const { activeTab } = useView(); 
   
   const [problem, setProblem] = useState(null);
   const [code, setCode] = useState("");
@@ -84,27 +83,42 @@ const ProblemWorkspace = () => {
     }
   }, [currentLine]);
 
-  // 4. Run (Console Only)
-  // 🟢 ROBUST HANDLE RUN
+  // 🟢 HELPER: Universal Argument Extractor (THE FIX)
+  // Extracts ["s"] or ["nums", "target"] dynamically from the data object
+  const getArgs = (sourceData, variables) => {
+      if (!variables || !Array.isArray(variables)) return [];
+      
+      return variables.map(varName => {
+          // 1. Direct Match
+          if (sourceData[varName] !== undefined) return sourceData[varName];
+
+          // 2. Fallback: If expecting 1 arg but source is raw value
+          if (variables.length === 1 && typeof sourceData !== 'object') return sourceData;
+
+          // 3. Common Aliases
+          if (sourceData.input !== undefined) return sourceData.input;
+          if (varName === 'head' && sourceData.values) return sourceData.values;
+          
+          return null; 
+      });
+  };
+
+  // 🟢 4. HANDLE RUN (Updated)
   const handleRun = async () => {
     if (!problem) return;
     setOutput({ status: "running" });
-    
-    const isList = problem.type === 'linked-list';
-    
-    // 1. Auto-detect user's function name
+
     let entryFunc = problem.entryFunction;
     const functionMatch = code.match(/^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/m);
     if (functionMatch && functionMatch[1]) entryFunc = functionMatch[1];
 
     let codeToRun = code;
-    let testCasesToRun = problem.testCases;
     let entryToRun = entryFunc;
-    let inputsToRun = problem.inputVariables;
 
-    // 2. LINKED LIST WRAPPERS
+    // Detect Linked List Mode
+    const isList = problem.type === 'linked-list';
+
     if (isList) {
-        // A. Inject Helpers
         const LIST_WRAPPERS = `
 ${LIST_NODE_HELPER}
 
@@ -117,57 +131,45 @@ def list_to_array(head):
     return arr
 
 def test_wrapper(arr):
-    # Handle edge case where arr might be None or not a list
     if arr is None: arr = []
     if not isinstance(arr, list): arr = [] 
-    
     head = create_list(arr)
     result_head = ${entryFunc}(head)
     return list_to_array(result_head)
 `;
         codeToRun = `${code}\n\n${LIST_WRAPPERS}`;
         entryToRun = "test_wrapper";
-        inputsToRun = ['arr'];
-        
-        // B. Normalize Test Cases (THE CRITICAL FIX)
-        testCasesToRun = problem.testCases.map(tc => {
-            // We aggressively search for the array data
-            // Some problem files use 'input', some 'head', some 'values'
-            let val = [];
-            if (Array.isArray(tc.input)) val = tc.input;
-            else if (Array.isArray(tc.head)) val = tc.head;
-            else if (Array.isArray(tc.values)) val = tc.values;
-            else if (Array.isArray(tc.nums)) val = tc.nums;
-            else if (Array.isArray(tc.arr)) val = tc.arr;
-            
-            // Debug check
-            if (val.length === 0 && tc.input) console.warn("Potential parsing issue:", tc);
-
-            return { 
-                ...tc, 
-                arr: val // Standardize key for the wrapper
-            };
-        });
     }
 
-    console.log(`🚀 Running ${isList ? 'Linked List Mode' : 'Standard Mode'}`);
+    // 🟢 Prepare Test Cases (Dynamic)
+    const testCasesToRun = problem.testCases.map(tc => {
+        let args = [];
+        if (isList) {
+            // Special handling for lists (single arg wrapper)
+            args = [tc.head || tc.values || tc.input || tc.arr || []];
+        } else {
+            // Universal handling for everything else (stack, array, etc.)
+            args = getArgs(tc, problem.inputVariables);
+        }
+        return { ...tc, args };
+    });
 
-    // 3. Execute
-    const { results, error } = await runCode(codeToRun, testCasesToRun, entryToRun, inputsToRun);
+    console.log(`🚀 Running ${problem.title}`, testCasesToRun[0].args);
+
+    const { results, error } = await runCode(codeToRun, testCasesToRun, entryToRun, problem.inputVariables);
     
     if (error) {
         setOutput({ status: "error", message: error });
     } else {
         setOutput({ status: "success", cases: results });
-        
-        // Auto-visualize if successful
+        // Auto-visualize first case on success
         let inputData = problem.visualData;
         try { inputData = JSON.parse(customVisualData); } catch(e) {}
         handleVisualize(inputData);
     }
   };
 
-  // 🟢 5. SMART VISUALIZE (The Fix)
+  // 🟢 5. HANDLE VISUALIZE (Updated)
   const handleVisualize = async (dataToVisualize) => {
     setIsVisualizing(true);
     setTraceData([]);
@@ -176,65 +178,52 @@ def test_wrapper(arr):
     try {
       const isList = problem.type === 'linked-list';
       
-      // A. ROBUST FUNCTION DETECTION
-      // We ignore the config and find what the user ACTUALLY wrote
+      // A. Function Detection
       let entryFunc = problem.entryFunction;
       const functionMatch = code.match(/^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/m);
-      if (functionMatch && functionMatch[1]) {
-          entryFunc = functionMatch[1];
-          console.log(`🔎 Detected user function: ${entryFunc}`);
-      }
+      if (functionMatch && functionMatch[1]) entryFunc = functionMatch[1];
 
-      // B. PREPARE WRAPPER
+      // B. Prepare Wrapper
       let fullCode = code;
-      
       if (isList) {
-          // Wrap it so Python creates a list and calls the detected function
           fullCode = `${LIST_NODE_HELPER}\n${code}\n\ndef dynamic_entry(arr):\n    h = create_list(arr)\n    ${entryFunc}(h)`;
           entryFunc = "dynamic_entry";
       }
 
-      // C. PREPARE ARGS
+      // 🟢 C. Prepare Args (THE FIX)
       let inputArgs = [];
       if (isList) {
-           inputArgs = [dataToVisualize.values || dataToVisualize.nums || dataToVisualize.head || [1, 2, 3, 4, 5]];
+          inputArgs = [dataToVisualize.values || dataToVisualize.nums || dataToVisualize.head || []];
       } else {
-           inputArgs = [
-               dataToVisualize.nums || dataToVisualize.values || [], 
-               dataToVisualize.target
-           ];
-      }
+    // 🟢 UNIVERSAL LOGIC: This allows { "s": "..." } to work!
+    // It maps the keys defined in your problem config (["s"]) to the data you pasted
+    inputArgs = problem.inputVariables.map(variableName => {
+        // 1. Check if the key exists directly (e.g. dataToVisualize.s)
+        if (dataToVisualize[variableName] !== undefined) {
+            return dataToVisualize[variableName];
+        }
+        // 2. Fallback for "Two Sum" legacy style (e.g. dataToVisualize.nums)
+        if (variableName === 'nums') return dataToVisualize.nums || [];
+        if (variableName === 'target') return dataToVisualize.target || 0;
+        
+        return null;
+    });
+}
       
-      console.log("🚀 SENDING CODE:", fullCode);
-      console.log("🚀 SENDING ARGS:", inputArgs);
+      console.log("🚀 Visualizing Args:", inputArgs);
 
-      // D. EXECUTE
+      // D. Execute
       const raw = await generateDynamicTrace(fullCode, entryFunc, inputArgs);
       
-      console.group("🔍 AST TRACE DEBUGGER");
-      console.log("🔥 RAW PYTHON EVENTS:", raw);
-      
-      if (!raw || raw.length === 0) {
-        console.warn("⚠️ Python returned empty trace. Check console for Pyodide errors.");
-        console.groupEnd();
-        setIsVisualizing(false);
-        return;
-      }
-      
-      // E. TRANSFORM
+      // E. Transform
       const isEventStream = raw[0] && (raw[0].event !== undefined);
       let steps = [];
       
       if (isEventStream) {
-          console.log("⚙️ Using NEW EVENT TRANSFORMER");
           steps = transformEventTrace(raw);
       } else {
-          console.log("🐢 Using LEGACY SNAPSHOT TRANSFORMER");
           steps = transformDynamicTrace(raw, problem.type);
       }
-
-      console.log("✨ TRANSFORMED UI FRAMES:", steps);
-      console.groupEnd();
 
       if (steps && steps.length > 0) {
         setTraceData(steps);
@@ -242,7 +231,7 @@ def test_wrapper(arr):
       }
 
     } catch (error) {
-      console.error("❌ VISUALIZATION CRASH:", error);
+      console.error("Visualizer Error:", error);
     } finally {
       setIsVisualizing(false);
     }
