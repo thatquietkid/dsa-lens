@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { runStaticAnalysis } from '../utils/astAnalyzer';
 
 // 🟢 GLOBAL CACHE (Singleton Pattern)
 // Lives outside the hook so it persists across page navigations
@@ -42,7 +43,14 @@ def record_event(ev, tgt, val, line):
     return val
 
 class Instrumenter(ast.NodeTransformer):
+    # Runtime wrappers and ListNode.__init__ are plumbing, not the user's algorithm.
+    SKIP_FUNCTIONS = {'__init__', 'create_list', 'list_to_array', 'test_wrapper', 'dynamic_entry'}
+
     def visit_FunctionDef(self, node):
+        if node.name in self.SKIP_FUNCTIONS:
+            self.generic_visit(node)
+            return node
+
         injected_logs = []
         for arg in node.args.args:
             arg_name = arg.arg
@@ -244,9 +252,19 @@ def run_tests(entry_func, test_cases):
     }
   };
 
+  /**
+   * Run client-side static AST analysis (zero tokens).
+   * @param {string} code — user's Python code
+   * @returns {Promise<object>} ASTDiagnosticReport
+   */
+  const analyzeCode = async (code) => {
+    return runStaticAnalysis(pyodide, code);
+  };
+
   return { 
     loading, 
     runCode, 
-    generateDynamicTrace 
+    generateDynamicTrace,
+    analyzeCode,
   };
 };

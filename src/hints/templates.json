@@ -1,0 +1,47 @@
+{
+  "brute_force_nested": {
+    "label": "Nested Loops (Brute Force)",
+    "tier1": "Notice how your inner loop scans elements repeatedly. What happens to previous pairs on each step?",
+    "tier2": "Can you eliminate the nested scan with an auxiliary lookup structure like a hash map or frequency array to achieve O(n)?"
+  },
+  "hash_optimization": {
+    "label": "Hash Map / Key-Value Lookup",
+    "tier1": "You are querying an auxiliary map. Verify if you are checking the complement condition before or after storing the current key.",
+    "tier2": "Make sure you don't match an element with itself when indices are involved (e.g. `seen[complement] != i`)."
+  },
+  "pointer_convergence": {
+    "label": "Converging Two-Pointers",
+    "tier1": "Your two pointers shrink the problem boundary. Check the exact while-loop condition (`left < right` vs `left <= right`).",
+    "tier2": "Ensure each branch strictly moves at least one pointer forward; otherwise, identical duplicate values may cause an infinite loop."
+  },
+  "stack_pattern": {
+    "label": "LIFO Stack Container",
+    "tier1": "You are pushing and popping elements. What occurs if a closing symbol arrives when the stack is completely empty?",
+    "tier2": "Remember to check whether the stack is empty after the iteration finishes (e.g., unmatched open brackets leftover)."
+  },
+  "binary_search": {
+    "label": "Binary Search Bisection",
+    "tier1": "You are halving the search window. Ensure your midpoint computation does not result in an off-by-one or infinite loop on 2-element ranges.",
+    "tier2": "Verify your pointer updates: `left = mid + 1` vs `right = mid - 1`. If you keep `left = mid`, integer division can freeze convergence."
+  },
+  "single_pass": {
+    "label": "Single Pass Traversal",
+    "tier1": "You're scanning the input in a single pass. Verify what state variables need to be updated before the next element is processed.",
+    "tier2": "Consider whether maintaining a running maximum, running sum, or monotonic state would solve the query without multiple passes."
+  },
+  "recursive": {
+    "label": "Recursive Traversal",
+    "tier1": "Check your base case termination criteria. Does every branch reach a condition where no further recursive call is made?",
+    "tier2": "Inspect call stack overhead and repeated subproblems. Would memoizing intermediate results prevent exponential branching?"
+  },
+  "linear_search_in_loop": {
+    "label": "Linear Search Inside Loop",
+    "tier1": "You are doing an `x in collection` scan inside your loop. Searching a Python list takes O(n) time on every step.",
+    "tier2": "Convert the list to a `set` or `dict` before entering the loop. Membership tests in sets operate in O(1) average time."
+  },
+  "unknown": {
+    "label": "Algorithmic Invariant",
+    "tier1": "Trace your code step-by-step with the simplest failing test case. Which variable diverges first from your expected mental model?",
+    "tier2": "Formulate the algorithm's loop invariant: what condition must stay true before and after each iteration of your main loop?"
+  }
+}

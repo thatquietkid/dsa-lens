@@ -1,0 +1,47 @@
+{
+  "brute_force_nested": {
+    "label": "Nested Loop (Brute Force)",
+    "tier1": "Your solution uses nested loops. Think about what work the inner loop is doing — is it scanning for something that could be looked up instantly?",
+    "tier2": "Consider whether a hash map or set could replace the inner loop. If you are checking 'is X in this collection?', a set answers that in O(1) instead of O(n)."
+  },
+  "hash_optimization": {
+    "label": "Hash Map / Set Approach",
+    "tier1": "You are using a hash structure — that's the right direction. Check whether you are storing the right keys and looking up the right complements.",
+    "tier2": "Make sure you handle the case where a value maps to itself. Are you checking the complement before or after inserting the current element?"
+  },
+  "pointer_convergence": {
+    "label": "Two-Pointer / Convergence",
+    "tier1": "Your pointers are moving — but are they moving in the right direction? Think about what condition should make each pointer advance.",
+    "tier2": "With sorted input, two pointers from opposite ends can skip large sections. If the sum is too large, which pointer should move? If too small?"
+  },
+  "stack_pattern": {
+    "label": "Stack-Based Approach",
+    "tier1": "You are using a stack — good instinct. Consider what should happen when you pop: does the popped item match what you expect?",
+    "tier2": "Think about edge cases: what if the stack is empty when you try to pop? What if there are items left on the stack at the end?"
+  },
+  "binary_search": {
+    "label": "Binary Search",
+    "tier1": "You are halving the search space — make sure your boundary updates don't skip the target or loop forever.",
+    "tier2": "Check your mid calculation and boundary updates. After comparing nums[mid] with target, should you set left = mid + 1 or left = mid? An off-by-one here causes infinite loops or missed targets."
+  },
+  "single_pass": {
+    "label": "Single Pass",
+    "tier1": "Your approach uses a single loop — think about whether you are tracking all the state you need as you go.",
+    "tier2": "A single-pass solution often needs an accumulator or auxiliary variable. Are you updating it at the right point in the loop — before or after the check?"
+  },
+  "recursive": {
+    "label": "Recursive Approach",
+    "tier1": "You are using recursion. Make sure your base case covers all termination conditions and that each recursive call makes progress toward the base case.",
+    "tier2": "Check whether your recursive calls are exploring too many branches. Could memoization or an iterative approach reduce repeated work?"
+  },
+  "linear_search_in_loop": {
+    "label": "Linear Search Inside Loop",
+    "tier1": "You are using 'in' to search a list inside a loop. Each 'in' check scans the entire list, turning your O(n) loop into O(n²).",
+    "tier2": "Convert the list to a set before the loop. Set lookups are O(1) on average, which brings the total back down to O(n)."
+  },
+  "unknown": {
+    "label": "General Guidance",
+    "tier1": "Start by identifying the core operation: are you searching, sorting, or transforming? Pick the data structure that makes that operation cheap.",
+    "tier2": "Break the problem into smaller steps. What must be true before you can compute the answer? Can you precompute any of those conditions?"
+  }
+}

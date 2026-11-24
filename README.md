@@ -1,178 +1,114 @@
-# DSALens — DSA Visualizer 🔍🧠
+# DSA Lens · Adaptive Learning Harness
 
-**DSALens** is a lightweight, in-browser **Data Structures & Algorithms visualizer** that lets you write, run, and *see* Python algorithms step-by-step.
-It executes Python using **Pyodide** and converts algorithm execution into visual traces for intuitive learning.
-
----
-## 📌 Table of Contents
-
-- [Overview](#dsalens--dsa-visualizer-)
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [Quick Start](#-quick-start-development)
-- [How Pyodide Works](#-how-pyodide-works-here)
-- [Project Structure](#-project-structure)
-- [Adding a New Problem](#-adding-a-new-problem)
-- [Editing Visual Input](#-editing-visual-input)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
----
-## ✨ Features
-
-* 🐍 **Run Python in the browser** using Pyodide (no backend needed)
-* 🎥 **Live visualizations** for common DSA problems:
-
-  * Two Sum
-  * Binary Search
-  * Reverse Linked List
-  * Valid Parentheses
-  * More coming…
-* 🧩 **Step-by-step execution traces** rendered as stacks, arrays, and linked lists
-* 📝 **Monaco Editor** with test execution console
-* ⚙️ **Custom visual input** for experimenting with different cases
-* 🎞️ Smooth animations powered by Framer Motion
+A visual DSA practice environment engineered with in-browser Python execution, static AST pattern analysis, pedagogical runtime state stepping, and an inverted zero-token AI tutoring architecture.
 
 ---
 
-## 🛠️ Tech Stack
+## 🌟 Architecture Overview
 
-* **React** (Vite / CRA-style setup)
-* **Monaco Editor** — code editing
-* **Pyodide (CDN)** — in-browser Python execution
-* **Framer Motion** — animations
-* **lucide-react** — icons
+```mermaid
+flowchart TD
+    UserCode[Student Submits Code in Monaco] --> Pyodide[Pyodide In-Browser Worker]
+    Pyodide --> ASTParser[Static AST Analysis & Complexity Inspector]
+    Pyodide --> TestRunner[Run Unit Test Cases]
+    
+    TestRunner -->|All Pass| Success[Mark Solved & Update Domain Elo +15]
+    TestRunner -->|Fail| LocalDiagnostics[Local Diagnostic Engine]
+    
+    ASTParser --> LocalDiagnostics
+    LocalDiagnostics --> ArchetypeMatcher{Matches Known Mistake Archetype?}
+    
+    ArchetypeMatcher -->|Yes - 85% of cases| Rung1[Tier 1/2 Local Deterministic Hints - 0 Tokens]
+    ArchetypeMatcher -->|No / Student Stuck| EscalationCheck{User Requests Deep AI Coach?}
+    
+    EscalationCheck -->|No| SelfCorrection[Student Continues Iterating]
+    EscalationCheck -->|Yes| EdgeProxy[Compress AST Delta + Fail Input < 120 Tokens]
+    EdgeProxy --> LLM[Fast Mini LLM - Max 150 Out Tokens]
+    LLM --> SocraticFeedback[Display Socratic Invariant Guidance]
+```
 
 ---
 
-## 🚀 Quick Start (Development)
+## 🚀 Key Capabilities
 
-### 1. Install dependencies
+### 1. Zero-Token Static AST Analysis
+- Executes in-browser via Pyodide (`src/utils/astAnalyzer.js`) in under 5ms.
+- Analyzes loop depths, detects linear searches within loops (`x in list`), recursion, stack invariants, and estimates time/space complexity without external server queries.
 
+### 2. Multi-Domain Skill Matrix & Elo System
+- Calibrates initial competence with a 60-second micro-warmup challenge.
+- Tracks independent Elo ratings across algorithmic domains (`arrays_hashing`, `stack`, `binary_search`, `two_pointers`, `linked_lists`).
+- Dynamically routes problems based on learner competency.
+
+### 3. Pedagogical AST Visualizer & Ghost Trace
+- Breaks code structures into 4 core semantic primitives:
+  1. **Traverser / Iterator**
+  2. **Memory Container**
+  3. **State Accumulator**
+  4. **Condition Gate**
+- **X-Ray View**: Directly highlights complexity bottlenecks and anti-patterns inside the Monaco editor.
+- **Ghost Trace**: Renders runtime variable states as floating overlays on source code lines during step execution.
+
+### 4. Low-Token Socratic AI Mentor
+- **3-Tier Hint Ladder**:
+  - **Tier 1 (Nudge)**: 0 Tokens (Socratic nudge)
+  - **Tier 2 (Pattern)**: 0 Tokens (Optimal structural recommendation)
+  - **Tier 3 (AI Coach)**: Low Tokens (Capped at 150 tokens max, ultra-compact 4-tuple input)
+- **Token Economics**: Enforces a 3-calls-per-10-minute rate limit and tracks session token consumption against a 5,000 token budget.
+
+---
+
+## 🛠️ Getting Started
+
+### Prerequisites
+- Node.js (v18+)
+- npm
+
+### Installation
 ```bash
+# Clone and install dependencies
 npm install
-```
 
-### 2. Start the dev server
-
-```bash
+# Start local development server
 npm run dev
-# or
-npm start
 ```
 
-### 3. Open in browser
-Go to
-[http://localhost:5173](http://localhost:5173)
+### Production Build
+```bash
+npm run build
+```
 
----
-
-## 🧠 How Pyodide Works Here
-
-* Pyodide is loaded via CDN (`src/hooks/usePyodide.js`)
-* Python code is executed fully in the browser
-* Each problem provides a **trace script** that:
-
-  * Executes the algorithm
-  * Emits structured JSON
-* The visualizer consumes this JSON to render step-by-step visuals
-
-⚠️ **Note:**
->Avoid heavy or infinite Python logic — Pyodide runs on the main thread and can slow down the UI.
-
----
-
-## 📁 Project Structure
-
-```text
-src/
-├── App.jsx                          # App entry + routing
-├── hooks/
-│   └── usePyodide.js                # Pyodide loader + execution helpers
-├── components/
-│   ├── layout/
-│   │   └── Header.jsx               # Top navigation (Editor / Visualizer / Learn)
-│   ├── Pages/
-│   │   └── ProblemWorkspace.jsx     # Editor + Console + Visualizer
-│   └── Workspace/
-│       ├── VisualizerRenderer.jsx   # Playback controls
-│       └── VisualTrace.jsx          # Renders arrays, stacks, linked lists
-├── problems/
-│   ├── twoSum.jsx
-│   ├── validParentheses.jsx
-│   └── index.js                     # Problem registry
+### Running Test Suite
+```bash
+npm test
 ```
 
 ---
 
-## ➕ Adding a New Problem
+## 📁 Repository Structure
 
-1. Create a file in `src/problems/`
-   Example: `myProblem.jsx`
-
-2. Export a default object:
-
-```js
-export default {
-  id: "my-problem",
-  title: "My Problem",
-  difficulty: "Easy",
-  entryFunction: "solve",
-  inputVariables: ["nums", "target"],
-  defaultCode: `def solve(nums, target): pass`,
-  testCases: [
-    { input: "[1,2,3], 4", expected: "True" }
-  ],
-  visualData: { nums: [1, 2, 3], target: 4 },
-  getTraceScript: (visualData) => `# python trace script`
-};
+```
+dsa-lens/
+├── src/
+│   ├── components/
+│   │   ├── Adaptive/           # Skill badges, WarmupModal, ASTVisualizer, TokenDashboard
+│   │   ├── Pages/              # ProblemWorkspace, Home
+│   │   └── Workspace/          # Live trace renderer, Monaco editor integration
+│   ├── hints/                  # Deterministic hint templates and helpers
+│   ├── problems/               # Problem definitions and test suites
+│   ├── services/               # AI Hint service and Cloudflare Edge worker proxy
+│   ├── utils/                  # AST analyzer, Elo rating system, Token budget
+│   └── template/               # promptTemplate.md for automated LLM problem generation
+├── tests/                      # Automated test suite (integration & token budget audit)
+└── tasks_breakdown.md          # Multi-phase execution plan
 ```
 
-3. Register it in `src/problems/index.js`
-
 ---
 
-## 🎛️ Editing Visual Input
+## 🤝 Adding New Problems via LLM Pipeline
 
-1. Open a problem
-2. Click the **settings icon** in the Live Memory View
-3. Paste JSON matching the problem’s `visualData` shape
-4. Click **“Visualize This Data”**
-
----
-
-## 🧪 Troubleshooting
-
-* **“Engine loading…”**
-
-  * Pyodide is still initializing — wait a moment
-* **No visualization output**
-
-  * Ensure `getTraceScript()` prints a valid JSON string
-* **Linked list issues**
-
-  * Use the helper constructors provided in that problem’s file
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-
-1. Fork the repo
-2. Create a feature branch
-3. Add problems, improve visuals, or optimize performance
-4. Open a PR 🚀
-
-Guidelines:
-
-* Keep trace scripts deterministic
-* Prefer clarity over cleverness
-* Avoid heavy Python loops
-
----
-
-## 📄 License
-
-MIT License
-See the [`LICENSE`](LICENSE) file for details.
+Use `src/template/promptTemplate.md` to prompt any LLM (Gemini, Claude, GPT-4) with a raw problem description. The prompt instructs the model to produce a complete problem module adhering to the platform's contract:
+1. Define the JSX description component.
+2. Provide starter boilerplate (`def func(...): pass`).
+3. Define valid `visualData` and 6–12 test cases.
+4. Export the problem in `src/problems/index.js` and register metadata in `src/data/problemCatalog.js`.
